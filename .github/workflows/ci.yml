@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash version
+        run: bash --version | head -1
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck
+          # 只以 error 级别作为门禁，warning/style 仅打印
+          shellcheck -s bash -S error git-multi-config.sh install.sh tests/smoke.sh
+          shellcheck -s bash git-multi-config.sh install.sh tests/smoke.sh || true
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Environment
+        run: |
+          bash --version | head -1
+          git --version
+      - name: Smoke suite (default bash)
+        run: bash tests/smoke.sh
+      - name: Smoke suite (system bash 3.2 on macOS)
+        if: runner.os == 'macOS'
+        run: GMC_TEST_BASH=/bin/bash bash tests/smoke.sh
+      - name: Installer
+        run: PREFIX="$RUNNER_TEMP/bin" ./install.sh && "$RUNNER_TEMP/bin/git-multi-config" --version
+      - name: Help output
+        run: ./git-multi-config.sh --help

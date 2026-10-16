@@ -1,0 +1,8 @@
+# backups created by the tool
+*.bak.*
+*.gmc.tmp
+
+# local test artifacts
+.DS_Store
+dist/
+answers.local.conf
