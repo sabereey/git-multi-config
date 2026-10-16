@@ -365,6 +365,20 @@ see the next section.
 | `~/.config/git-multi-config/state.conf` | 600 | managed directories, identities, guard bookkeeping |
 | `~/.config/git-multi-config/hooks/pre-commit` | 755 | the optional commit guard |
 
+### Where the config directory actually lives
+
+The `~/.config/git-multi-config` shown above is the *default*, not a fixed path. It is resolved as:
+
+```
+$GMC_HOME   →   ${XDG_CONFIG_HOME:-~/.config}/git-multi-config   →   ~/.config/git-multi-config
+```
+
+If `XDG_CONFIG_HOME` is set in your environment (common on Linux desktops and in CI containers),
+everything lands under it instead. That is intentional — but it means a script that only overrides
+`HOME` while trying to sandbox this tool will not find the files where it expects them. Either
+export `GMC_HOME` explicitly, or unset `XDG_CONFIG_HOME`. `list` and `doctor` always print the
+resolved absolute paths, so use those to confirm.
+
 Managed blocks are delimited so they can be replaced safely:
 
 ```
@@ -426,6 +440,8 @@ the tool's own directory and points the global `core.hooksPath` at it. The hook 
 | An old `Host github.com` entry exists in `~/.ssh/config` | SSH uses the first match | harmless for Git in managed directories (`core.sshCommand` wins); remove the stale block if you also use plain `ssh` |
 | Commit blocked by the guard | email is not one of the registered two | fix the local config, update the tool with the new address, or use `GMC_ALLOW_ANY=1` |
 | `init` says "not an interactive terminal" | piped or non-TTY invocation | use `--from-file` |
+| Files are not where you expected them | `XDG_CONFIG_HOME` is set, so the config directory resolves elsewhere | export `GMC_HOME`, or unset `XDG_CONFIG_HOME`; check the paths printed by `list` |
+| A sandboxed test run only overrides `HOME` and finds nothing | same as above — the tool honours `XDG_CONFIG_HOME` | set `GMC_HOME` in the sandbox too |
 | Nothing changed after editing files by hand | `includeif.conf` and `state.conf` are generated | edit the answer file and re-run `init` |
 
 Diagnostics worth keeping in muscle memory:

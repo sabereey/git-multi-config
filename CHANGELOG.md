@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The smoke suite now isolates `XDG_CONFIG_HOME` and the `GMC_*` variables, not only
+  `HOME`. The config directory resolves through `XDG_CONFIG_HOME`, so on a runner that
+  presets it the generated files landed outside the throwaway `HOME`; every path
+  assertion then missed and an unguarded `grep` aborted the run. CI is green on both
+  Ubuntu and macOS again.
+- Test failures now print the relevant log and emit a GitHub Actions annotation, so a
+  failure is diagnosable without access to the job log.
+- Guarded command substitutions in the test suite so a single missing file can no
+  longer abort the whole run.
+
+### Documentation
+
+- Documented how the config directory is resolved (`GMC_HOME` → `XDG_CONFIG_HOME` →
+  `~/.config`) and what that means for sandboxed scripts and CI — see manual §8 and the
+  troubleshooting table.
+
 ## [2.0.0] - 2026-10-16
 
 The first release intended for public use. A full rewrite of the original

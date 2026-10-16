@@ -341,6 +341,19 @@ git config --local user.email "dev@corp.com"
 | `~/.config/git-multi-config/state.conf` | 600 | 受管目录、身份、钩子记账信息 |
 | `~/.config/git-multi-config/hooks/pre-commit` | 755 | 可选的提交拦截钩子 |
 
+### 配置目录究竟落在哪里
+
+上表里的 `~/.config/git-multi-config` 是**默认值**，不是固定路径。实际解析顺序为：
+
+```
+$GMC_HOME   →   ${XDG_CONFIG_HOME:-~/.config}/git-multi-config   →   ~/.config/git-multi-config
+```
+
+如果你的环境里设了 `XDG_CONFIG_HOME`（Linux 桌面、CI 容器里很常见），所有文件都会落到它下面。
+这是有意为之 —— 但也意味着：**只覆盖 `HOME` 来做沙箱的脚本，会在预期位置找不到这些文件。**
+请显式导出 `GMC_HOME`，或先 `unset XDG_CONFIG_HOME`。`list` 与 `doctor` 始终打印解析后的绝对路径，
+可以用它们确认。
+
 管理块用标记包裹，便于安全替换：
 
 ```
@@ -399,6 +412,8 @@ COMPANY_DIRS='~/work:~/clients'
 | `~/.ssh/config` 里有旧的 `Host github.com` | SSH 采用首个匹配 | 对受管目录内的 Git 操作无影响（`core.sshCommand` 优先）；如果也直接用 `ssh`，建议删掉旧块 |
 | 提交被钩子拦下 | 邮箱不在登记的两个之内 | 修正本地配置、把新邮箱加进工具，或 `GMC_ALLOW_ANY=1` |
 | `init` 提示非交互终端 | 管道或非 TTY 环境 | 改用 `--from-file` |
+| 文件不在预期位置 | 环境里设了 `XDG_CONFIG_HOME`，配置目录解析到了别处 | 导出 `GMC_HOME`，或 `unset XDG_CONFIG_HOME`；用 `list` 打印的路径确认 |
+| 只覆盖 `HOME` 的沙箱测试什么都找不到 | 同上——工具会遵循 `XDG_CONFIG_HOME` | 沙箱里同时设置 `GMC_HOME` |
 | 手工改了文件却没生效 | `includeif.conf` 与 `state.conf` 是生成物 | 改答案文件后重跑 `init` |
 
 值得记住的诊断命令：
