@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented how the config directory is resolved (`GMC_HOME` → `XDG_CONFIG_HOME` →
   `~/.config`) and what that means for sandboxed scripts and CI — see manual §8 and the
   troubleshooting table.
+- Added an FAQ entry (both READMEs) and a troubleshooting row for the most common false
+  alarm: `git config user.email` returning the default identity in a folder under a managed
+  directory. A `gitdir:` condition is only evaluated once Git has found a repository, so in
+  a plain folder you observe the global default — and identities only matter inside a
+  repository anyway.
 
 ## [2.0.0] - 2026-10-16
 

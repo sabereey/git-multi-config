@@ -433,6 +433,7 @@ the tool's own directory and points the global `core.hooksPath` at it. The hook 
 |---|---|---|
 | `Permission denied (publickey)` on one account | no `~/.ssh/config` entry, SSH tries keys in sequence | re-run `init`; verify with `doctor --ssh` |
 | Commits use the wrong identity | repository-local override, or the directory is not managed | `audit --fix`; then `list` to confirm the directory list |
+| `git config user.email` shows the default identity inside a managed directory | you are not inside a repository — a `gitdir:` condition is only evaluated once Git has found a `.git` directory | `cd` into a real repo, or check `git rev-parse --show-toplevel` |
 | The directory rule does not match | the path reaches the directory through a symlink | re-run `init` — two rules are written per directory, including the physical path |
 | Rules appear to be ignored entirely | git older than 2.13 | `git --version`; upgrade git |
 | Company repository outside the managed tree keeps the personal identity | git older than 2.36, so no remote-URL rule exists | upgrade git and re-run `init`, or move the repository |

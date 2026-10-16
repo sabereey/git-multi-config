@@ -405,6 +405,7 @@ COMPANY_DIRS='~/work:~/clients'
 |---|---|---|
 | 某个账号 `Permission denied (publickey)` | 没有 `~/.ssh/config` 条目，SSH 在按顺序试密钥 | 重跑 `init`；用 `doctor --ssh` 确认 |
 | 提交身份不对 | 仓库有本地覆盖，或该目录不在受管列表里 | `audit --fix`；再用 `list` 核对目录列表 |
+| 在受管目录里 `git config user.email` 却是默认身份 | 当前不在 git 仓库内——`gitdir:` 条件只有在 Git 找到 `.git` 目录后才会被求值 | `cd` 进真正的仓库，或用 `git rev-parse --show-toplevel` 检查 |
 | 目录规则不生效 | 到达该目录的路径经过了软链 | 重跑 `init`——每个目录会写逻辑路径与物理路径两条规则 |
 | 规则完全不生效 | git 低于 2.13 | `git --version`，升级 git |
 | 目录外的公司仓库仍是个人身份 | git 低于 2.36，没有 remote 规则 | 升级 git 后重跑 `init`，或把仓库挪进受管目录 |

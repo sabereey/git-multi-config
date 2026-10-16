@@ -228,6 +228,23 @@ deterministic behaviour; use `GIT_SSH_COMMAND` or a one-off clone elsewhere if y
 The one you chose as default. Repos cloned outside still get the right identity for the company
 server on git 2.36+, thanks to `hasconfig:remote.*.url:` rules.
 
+**`git config user.email` still prints the company address in a folder under my personal directory.**
+That folder is almost certainly not a repository. `includeIf "gitdir:<dir>/"` is only evaluated once
+Git has *found* a repository — the pattern is matched against the location of the `.git` directory.
+In a plain folder nothing matches, so you fall back to the global default identity (and the identity
+only has any effect inside a repository anyway). Check from inside a real one:
+
+```bash
+cd ~/Documents/some-project        # an actual repository
+git config --show-origin --get-all user.email
+#   file:~/.gitconfig            <your global default>
+#   file:~/.gitconfig-personal   you@example.com   ← conditional include applied
+```
+
+If the `.gitconfig-personal` line is missing, run `git rev-parse --show-toplevel`: the repository
+root must sit inside a managed directory. Subdirectories of a repository are fine — Git resolves
+upwards to the root.
+
 **Does it work with paths containing spaces?**
 Yes.
 

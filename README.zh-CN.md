@@ -169,6 +169,21 @@ SSH 采用“首个匹配值生效”，老条目可能对直接 clone 生效。
 你设定的默认身份。git 2.36+ 下，即使仓库 clone 到别处，只要 remote 指向公司服务器，
 仍会通过 `hasconfig:remote.*.url:` 规则自动使用公司身份。
 
+**在个人目录下的某个文件夹里 `git config user.email` 还是打印公司邮箱？**
+几乎可以肯定：**那个文件夹不是 git 仓库**。`includeIf "gitdir:<目录>/"` 只有在 Git 已经
+**找到仓库**时才会被求值 —— 匹配对象是 `.git` 目录所在的位置。在一个普通文件夹里没有任何条件命中，
+只会回落到全局默认身份（何况身份本来就只在仓库内才有意义）。请进到一个真正的仓库里确认：
+
+```bash
+cd ~/Documents/some-project        # 真仓库
+git config --show-origin --get-all user.email
+#   file:~/.gitconfig            <全局默认>
+#   file:~/.gitconfig-personal   you@example.com   ← 条件包含生效了
+```
+
+如果没有出现 `.gitconfig-personal` 那行，用 `git rev-parse --show-toplevel` 看仓库根在哪：
+它必须位于受管目录之内。仓库的**子目录**没问题，Git 会向上解析到仓库根。
+
 **路径里有空格可以吗？** 可以。
 
 **换电脑怎么迁移？** 把 `answers.conf` 带过去（或重新跑一次 `init`）即可，状态没有藏在别处。
