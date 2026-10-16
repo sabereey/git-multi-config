@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Read the manual first
+    url: https://github.com/sabereey/git-multi-config/blob/main/docs/manual.md
+    about: Install, commands, cookbooks, files written, troubleshooting.
+  - name: 中文操作手册
+    url: https://github.com/sabereey/git-multi-config/blob/main/docs/manual.zh-CN.md
+    about: 安装、命令、常见场景、写入的文件、故障排查。
+  - name: Run `git-multi-config doctor`
+    url: https://github.com/sabereey/git-multi-config/blob/main/docs/manual.md#8-troubleshooting
+    about: Most identity and SSH problems are identified by doctor in one shot.
+  - name: Questions and ideas
+    url: https://github.com/sabereey/git-multi-config/discussions
+    about: For usage questions that are not bugs, please use Discussions.

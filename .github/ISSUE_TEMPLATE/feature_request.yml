@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest an improvement
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do that is awkward or impossible today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: Describe the behaviour, command or flag you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Including how you solve this today.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      description: This project is intentionally small. Please confirm your idea can fit.
+      options:
+        - label: This can be done with bash 3.2 and core utils only (no new dependencies)
+          required: true
+        - label: This does not require a background daemon or a Git GUI
+          required: true

@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="git-multi-config — one machine, two Git identities, zero manual switching">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B0F16"/>
+      <stop offset="55%" stop-color="#0D1117"/>
+      <stop offset="100%" stop-color="#111823"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#1F6FEB" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#1F6FEB" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#3FB950" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#3FB950" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3FB950"/>
+      <stop offset="50%" stop-color="#58A6FF"/>
+      <stop offset="100%" stop-color="#3FB950" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#1B2431" stroke-width="1"/>
+    </pattern>
+    <style>
+      .sans { font-family: "Helvetica Neue", Helvetica, Arial, "DejaVu Sans", sans-serif; }
+      .mono { font-family: Menlo, Monaco, "DejaVu Sans Mono", "Courier New", monospace; }
+    </style>
+  </defs>
+
+  <!-- background -->
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)" opacity="0.55"/>
+  <circle cx="1160" cy="60" r="330" fill="url(#glowA)"/>
+  <circle cx="140" cy="600" r="300" fill="url(#glowB)"/>
+
+  <!-- eyebrow -->
+  <rect x="72" y="74" width="10" height="10" rx="2" fill="#3FB950"/>
+  <text class="mono" x="94" y="84" font-size="19" letter-spacing="2.6" fill="#7D8590">MULTI-ACCOUNT GIT, SOLVED</text>
+
+  <!-- wordmark -->
+  <text class="sans" x="72" y="163" font-size="74" font-weight="700" letter-spacing="-2.2" fill="#F0F6FC">git-multi-config</text>
+  <rect x="72" y="186" width="1136" height="3" rx="1.5" fill="url(#rule)"/>
+
+  <!-- tagline -->
+  <text class="sans" x="72" y="228" font-size="27" fill="#A9B4C2">One machine. Two Git identities. <tspan fill="#F0F6FC" font-weight="700">Zero manual switching</tspan> — the directory decides.</text>
+
+  <!-- terminal card -->
+  <rect x="72" y="262" width="1136" height="256" rx="15" fill="#0A0E14" stroke="#2A3341" stroke-width="1.5"/>
+  <rect x="72" y="262" width="1136" height="42" rx="15" fill="#151C26"/>
+  <path d="M72 289h1136v15H72z" fill="#151C26"/>
+  <circle cx="102" cy="283" r="6" fill="#FF5F57"/>
+  <circle cx="126" cy="283" r="6" fill="#FEBC2E"/>
+  <circle cx="150" cy="283" r="6" fill="#28C840"/>
+  <text class="mono" x="1180" y="289" font-size="16" text-anchor="end" fill="#5A6675">~/.config/git-multi-config/includeif.conf</text>
+
+  <!-- row 1 -->
+  <text class="mono" x="106" y="352" font-size="22" fill="#7EE787">~/work/my-service/</text>
+  <text class="mono" x="462" y="352" font-size="22" fill="#4D5A6B">→</text>
+  <text class="mono" x="502" y="352" font-size="22" fill="#DCE3EB">git@git.corp.com:team/my-service.git</text>
+  <text class="mono" x="502" y="382" font-size="19" fill="#6E7681">dev@corp.example.com · company key</text>
+
+  <!-- divider -->
+  <path d="M106 411h1068" stroke="#1E2733" stroke-width="1" stroke-dasharray="5 7"/>
+
+  <!-- row 2 -->
+  <text class="mono" x="106" y="452" font-size="22" fill="#7EE787">~/personal/dotfiles/</text>
+  <text class="mono" x="462" y="452" font-size="22" fill="#4D5A6B">→</text>
+  <text class="mono" x="502" y="452" font-size="22" fill="#DCE3EB">git@github.com:you/dotfiles.git</text>
+  <text class="mono" x="502" y="482" font-size="19" fill="#6E7681">you@example.com · personal key</text>
+
+  <!-- footer -->
+  <text class="sans" x="72" y="576" font-size="21" fill="#7D8590">bash 3.2+  ·  zero runtime dependencies  ·  audits existing repos  ·  commit guard  ·  MIT</text>
+  <rect x="1010" y="548" width="198" height="40" rx="20" fill="#12233B" stroke="#1F6FEB" stroke-width="1.5"/>
+  <text class="mono" x="1109" y="574" font-size="19" text-anchor="middle" fill="#79C0FF">sabereey</text>
+</svg>
