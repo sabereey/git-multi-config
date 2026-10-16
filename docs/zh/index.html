@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>git-multi-config — 一台电脑上配好公司和个人多 Git 账号，按目录自动切换身份</title>
+<meta name="description" content="一条命令在一台机器上配好公司私服与个人 GitHub 的多账号环境。用 includeIf 条件包含 + core.sshCommand 按目录自动切换 user.name、user.email 和 SSH 密钥，可审计并修复已有仓库的错配身份，还有提交前拦截钩子防止用错邮箱提交。零依赖，bash 3.2+ 即可运行。">
+<meta name="keywords" content="git 多账号, 一台电脑多个 git 账号, git 按目录切换身份, includeIf gitdir, 不同仓库用不同 ssh 密钥, git 提交邮箱错误, 公司和个人 git 共存, core.sshCommand, git 提交拦截钩子, 多账号 git 管理工具">
+<meta name="author" content="sabereey">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#0B0F16">
+
+<link rel="canonical" href="https://sabereey.github.io/git-multi-config/zh/">
+<link rel="alternate" hreflang="en" href="https://sabereey.github.io/git-multi-config/">
+<link rel="alternate" hreflang="zh-CN" href="https://sabereey.github.io/git-multi-config/zh/">
+<link rel="alternate" hreflang="x-default" href="https://sabereey.github.io/git-multi-config/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="git-multi-config">
+<meta property="og:title" content="git-multi-config — 一台电脑上的公司 + 个人 Git 多账号，按目录自动切换">
+<meta property="og:description" content="一条命令配好全部。目录决定你的 Git 身份和 SSH 密钥，从此不用手动切换。">
+<meta property="og:url" content="https://sabereey.github.io/git-multi-config/zh/">
+<meta property="og:image" content="https://sabereey.github.io/git-multi-config/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="终端截图：~/work/my-service 指向公司服务器，~/personal/dotfiles 指向 GitHub">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:locale:alternate" content="en">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="git-multi-config — 一台电脑上的公司 + 个人 Git 多账号">
+<meta name="twitter:description" content="目录决定你的 Git 身份和 SSH 密钥，不用手动切换。零依赖。">
+<meta name="twitter:image" content="https://sabereey.github.io/git-multi-config/social-preview.png">
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230B0F16'/><rect x='9' y='9' width='6' height='6' rx='1.5' fill='%233FB950'/><rect x='17' y='17' width='6' height='6' rx='1.5' fill='%2358A6FF'/></svg>">
+<link rel="stylesheet" href="../style.css">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "git-multi-config",
+  "softwareVersion": "2.0.0",
+  "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "版本控制",
+  "operatingSystem": "macOS, Linux, WSL",
+  "programmingLanguage": "Shell",
+  "inLanguage": "zh-CN",
+  "description": "一条命令在一台机器上配好公司私服与个人 GitHub 的多账号环境。通过 includeIf 条件包含与 core.sshCommand，按目录自动选择 user.name、user.email 和 SSH 密钥；可审计并修复已有仓库的错误身份，并可选装提交前拦截钩子。",
+  "url": "https://sabereey.github.io/git-multi-config/zh/",
+  "codeRepository": "https://github.com/sabereey/git-multi-config",
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+  "keywords": "git 多账号, git 按目录切换身份, includeIf gitdir, 不同仓库不同 SSH 密钥, core.sshCommand, git 提交拦截钩子",
+  "author": { "@type": "Person", "name": "sabereey", "url": "https://github.com/sabereey" }
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "inLanguage": "zh-CN",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "同一台电脑上，怎样让公司的仓库和个人仓库使用不同的 Git 身份和 SSH 密钥？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "用 Git 的条件包含（conditional includes）。给每个目录写一条 includeIf \"gitdir:<目录>/\"，让 Git 按仓库所在位置加载不同的 user.name 与 user.email；再用 core.sshCommand 为每个身份强制指定对应的 SSH 密钥。git-multi-config init 一条命令生成全部配置，并能审计你已有的仓库。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "为什么个人目录下的某个文件夹里 git config user.email 还是打印公司邮箱？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "那个文件夹几乎可以肯定不是 git 仓库。gitdir: 条件只有在 Git 已经找到仓库后才会被求值，匹配对象是 .git 目录所在的位置。在普通文件夹里没有任何条件命中，于是回落到全局默认身份。请进到真正的仓库里执行 git config --show-origin --get-all user.email 来确认条件包含是否生效。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "公司和个人两个账号都在 github.com 上，可以吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "可以。当两个身份共用同一域名时，公司条目会分到独立别名（例如 github.com-work），个人侧为 github.com-personal。每个身份的 core.sshCommand 仍然保证目录内使用正确的密钥，audit --fix 还能把绕过别名的 remote 改写过来。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "clone 到受管目录之外的仓库会怎样？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "它们使用你设定的默认身份。在 git 2.36 及以上，hasconfig:remote.*.url: 规则还会按 remote 地址匹配，所以在别处克隆的公司仓库依然会自动使用公司身份。"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "这个工具有运行时依赖吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "没有。它是一个 bash 脚本，macOS 自带的 bash 3.2 即可运行，不需要 Node、Python、Go、jq，也没有常驻进程。git 2.13 以上即可用条件包含，git 2.36 以上还能启用 remote 地址规则。"
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="dot"></span>git-multi-config</a>
+    <nav class="topnav">
+      <a href="#how">实现原理</a>
+      <a href="#compare">对比</a>
+      <a href="#faq" class="hide-sm">常见问题</a>
+      <a href="../" hreflang="en" lang="en">English</a>
+      <a href="https://github.com/sabereey/git-multi-config">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ============================================================== hero -->
+  <div class="wrap hero">
+    <p class="eyebrow">多账号 Git，一次解决</p>
+    <h1>一条命令，在公司电脑上配好公司与个人的 Git 多账号。<span class="soft">目录决定身份。</span></h1>
+    <p class="lede">
+      公司项目走公司私服，用<strong>公司邮箱和公司 SSH 密钥</strong>；
+      个人项目走 GitHub，用<strong>个人身份</strong>。整个过程不需要你手动切换任何东西。
+    </p>
+    <p class="lede sub">
+      它还能审计你已经存在的、本地配置写错的仓库，并可选装一个提交前钩子，
+      拒绝用未登记的邮箱提交。
+    </p>
+
+    <div class="card install">
+      <div class="install-head">
+        <i></i><i></i><i></i>
+        <span>install.sh</span>
+      </div>
+      <div class="install-body">
+        <pre id="cmd">curl -fsSL https://raw.githubusercontent.com/sabereey/git-multi-config/main/install.sh | bash</pre>
+        <button class="copy" data-copy="#cmd">复制</button>
+      </div>
+    </div>
+
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/sabereey/git-multi-config">在 GitHub 上查看</a>
+      <a class="btn ghost" href="https://github.com/sabereey/git-multi-config/blob/main/docs/manual.zh-CN.md">中文操作手册</a>
+      <a class="btn ghost" href="https://github.com/sabereey/git-multi-config/blob/main/README.md" hreflang="en">English README</a>
+    </div>
+  </div>
+
+  <!-- ============================================================== 问题 -->
+  <section>
+    <div class="wrap">
+      <h2>要解决的问题</h2>
+      <p class="section-title">一台电脑上两个账号，会引发三类经典事故。</p>
+
+      <div class="grid c3">
+        <div class="card tile">
+          <span class="bad">git commit</span>
+          <h3>提交带上了错误的邮箱</h3>
+          <p>公司提交里混进了你的个人邮箱，或者公开仓库暴露了你的工作身份。事后能改，
+             但前提是你发现了 —— 而通常没人发现。</p>
+        </div>
+        <div class="card tile">
+          <span class="bad">git clone</span>
+          <h3>Permission denied (publickey)</h3>
+          <p>SSH 按顺序试密钥，把错误的那把递了上去。大家常用的办法是调换
+             <code>~/.ssh/config</code> 顺序，结果把另一边的仓库弄坏了。</p>
+        </div>
+        <div class="card tile">
+          <span class="bad">git config --local</span>
+          <h3>三十个老仓库，全是错的</h3>
+          <p>它们是在你还不在意这件事的时候克隆的，每个都带着过期的
+             <code>user.email</code>。手工一个个修，就是一个下午的 <code>cd</code> 加复制粘贴。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 原理 -->
+  <section id="how">
+    <div class="wrap">
+      <h2>实现原理</h2>
+      <p class="section-title">回答八个问题，之后全部自动、且随时可查。</p>
+
+      <div class="panes">
+        <div class="card pane">
+          <div class="pane-head">git-multi-config init</div>
+<pre><span class="d">$</span> <span class="k">git-multi-config init</span>
+
+  公司服务器     <span class="b">git.corp.example.com</span>
+  公司身份       <span class="g">Corp User &lt;dev@corp.example.com&gt;</span>
+  公司目录       <span class="b">~/work</span>
+  个人域名       <span class="b">github.com</span>
+  个人身份       <span class="g">you &lt;you@example.com&gt;</span>
+  个人目录       <span class="b">~/personal</span>
+  默认身份       <span class="hi">个人</span>
+  提交拦截钩子   <span class="hi">是</span>
+
+<span class="d">[ ok ]</span> 已写入 ~/.ssh/config
+<span class="d">[ ok ]</span> 已写入 ~/.gitconfig-company
+<span class="d">[ ok ]</span> 已写入 ~/.gitconfig-personal
+<span class="d">[ ok ]</span> 已写入 includeIf 规则
+<span class="d">[ ok ]</span> 已安装提交前钩子</pre>
+        </div>
+
+        <div class="card pane">
+          <div class="pane-head">~/.config/git-multi-config/includeif.conf</div>
+<pre><span class="d"># 生成文件，请勿手工编辑</span>
+
+<span class="k">[includeIf "gitdir:~/work/"]</span>
+        path = ~/.gitconfig-company
+
+<span class="k">[includeIf "gitdir:~/personal/"]</span>
+        path = ~/.gitconfig-personal
+
+<span class="d"># git 2.36+ 起，还会按 remote 地址匹配，</span>
+<span class="d"># 因此在别处克隆的公司仓库同样</span>
+<span class="d"># 会用到公司身份</span>
+<span class="k">[includeIf "hasconfig:remote.*.url:git@git.corp.example.com:**"]</span>
+        path = ~/.gitconfig-company</pre>
+        </div>
+      </div>
+
+      <div class="grid c2" style="margin-top:22px">
+        <div class="card tile">
+          <h3>为什么用 <code>core.sshCommand</code>，而不只是 SSH 别名</h3>
+          <p>别名只有在你记得用它时才有效。每个身份同时设置 <code>core.sshCommand</code>，
+             于是目录内始终强制使用正确的密钥 —— 即使 remote 直接指向主机名也一样。</p>
+        </div>
+        <div class="card tile">
+          <h3>为什么每个目录写两条规则</h3>
+          <p>Git 是把 <code>gitdir:</code> 和<em>物理路径</em>做匹配的。macOS 上 <code>/tmp</code>、
+             <code>/var</code> 都是软链，只写逻辑路径会静默失配，所以两种形式都写。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 能力 -->
+  <section>
+    <div class="wrap">
+      <h2>你得到的</h2>
+      <p class="section-title">一个 bash 脚本。没有运行时、没有常驻进程、没有需要你维护的东西。</p>
+
+      <div class="grid c2">
+        <ul class="checks">
+          <li><b>按目录切换</b> <code>user.name</code>、<code>user.email</code> 与签名密钥</li>
+          <li><b>每个目录用正确的 SSH 密钥</b>，靠 <code>core.sshCommand</code> 强制生效</li>
+          <li><b>audit</b> 找出身份与 remote 错配，<code>audit --fix</code> 直接修复</li>
+          <li><b>提交拦截钩子</b>拒绝用未登记的邮箱提交</li>
+        </ul>
+        <ul class="checks">
+          <li><b>doctor</b> 检查 git 版本、文件、密钥权限、钩子与 SSH 登录</li>
+          <li><b>幂等</b> —— 重复执行不会产生重复的管理块</li>
+          <li><b>可回滚</b> —— <code>uninstall</code> 清干净，并还原你之前的 hooksPath</li>
+          <li><b>中英双语</b>界面与文档</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 命令 -->
+  <section>
+    <div class="wrap">
+      <h2>命令</h2>
+      <p class="section-title">六个子命令，以及一套在临时 <code>$HOME</code> 里跑的测试。</p>
+
+      <div class="card table-scroll">
+        <table>
+          <thead>
+            <tr><th>命令</th><th>作用</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>init</code></td><td>交互式配置向导。支持 <code>--from-file</code>，用于非交互地批量配置机器。</td></tr>
+            <tr><td><code>audit [--fix]</code></td><td>扫描受管目录下的所有仓库，找出身份或 remote 错配。发现问题时退出码非零，可直接当 CI 门禁用。</td></tr>
+            <tr><td><code>list</code></td><td>打印当前配置与解析后的文件路径。</td></tr>
+            <tr><td><code>doctor [--ssh]</code></td><td>检查 git 版本、规则是否挂载、密钥权限、钩子健康度，可选测试 SSH 认证。</td></tr>
+            <tr><td><code>uninstall [--restore]</code></td><td>移除所有管理块，并还原之前的 <code>core.hooksPath</code>。</td></tr>
+            <tr><td><code>help</code></td><td>用法与选项说明，中英双语。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 对比 -->
+  <section id="compare">
+    <div class="wrap">
+      <h2>对比</h2>
+      <p class="section-title">手写 <code>includeIf</code> 能覆盖顺利的路径，这个工具覆盖剩下的。</p>
+
+      <div class="card table-scroll">
+        <table>
+          <thead>
+            <tr><th></th><th>git-multi-config</th><th>手写 <code>includeIf</code></th><th>其他账号切换工具</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>零依赖</td><td class="yes">仅需 bash</td><td class="yes">仅需 bash</td><td class="no">常见 Go / Rust / Node</td></tr>
+            <tr><td>按目录自动切换</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">多数要手动</td></tr>
+            <tr><td>每个目录用对的密钥</td><td class="yes">core.sshCommand</td><td class="no">✗</td><td class="no">靠主机别名</td></tr>
+            <tr><td>审计并修复已有仓库</td><td class="yes">✓</td><td class="no">✗</td><td class="no">很少有</td></tr>
+            <tr><td>提交拦截钩子</td><td class="yes">可选</td><td class="no">✗</td><td class="no">很少有</td></tr>
+            <tr><td>软链 / 物理路径处理</td><td class="yes">✓</td><td class="no">很容易写错</td><td class="no">很少有</td></tr>
+            <tr><td>交互式向导</td><td class="yes">✓</td><td class="no">✗</td><td class="no">部分有</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ FAQ -->
+  <section id="faq">
+    <div class="wrap">
+      <h2>常见问题</h2>
+      <p class="section-title">大家真正会问的那几个。</p>
+
+      <div class="faq-item">
+        <h3>同一台电脑上，怎样让公司仓库和个人仓库用不同的 Git 身份和 SSH 密钥？</h3>
+        <p>用 Git 的条件包含。给每个目录写一条 <code>includeIf "gitdir:&lt;目录&gt;/"</code>，
+           让 Git 按仓库所在位置加载不同的 <code>user.name</code> 与 <code>user.email</code>；
+           再用 <code>core.sshCommand</code> 为每个身份强制指定对应的 SSH 密钥。
+           <code>git-multi-config init</code> 一条命令生成全部配置，并审计你已有的仓库。</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>为什么个人目录下的某个文件夹里 <code>git config user.email</code> 还是打印公司邮箱？</h3>
+        <p>那个文件夹几乎可以肯定不是仓库。<code>gitdir:</code> 条件只有在 Git <em>找到</em>仓库之后
+           才会被求值 —— 匹配对象是 <code>.git</code> 目录所在的位置 —— 所以在普通文件夹里没有任何
+           条件命中，你看到的是全局默认身份。请进到真正的仓库里确认：</p>
+<pre>cd ~/Documents/some-project
+git config --show-origin --get-all user.email
+#   file:~/.gitconfig            &lt;全局默认&gt;
+#   file:~/.gitconfig-personal   you@example.com   ← 条件包含生效了</pre>
+      </div>
+
+      <div class="faq-item">
+        <h3>公司和个人两个账号都在 github.com 上，可以吗？</h3>
+        <p>可以。公司条目会分到独立别名（例如 <code>github.com-work</code>），个人侧是
+           <code>github.com-personal</code>。每个身份的 <code>core.sshCommand</code> 仍然保证目录内
+           使用正确密钥，<code>audit --fix</code> 还能把绕过别名的 remote 改回来。</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>clone 到受管目录之外的仓库会怎样？</h3>
+        <p>它们使用你设定的默认身份。在 git 2.36+ 上，
+           <code>hasconfig:remote.*.url:</code> 规则还会按 remote 地址匹配，所以在别处克隆的公司仓库
+           依然会自动使用公司身份。</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>有运行时依赖吗？</h3>
+        <p>没有。一个 bash 脚本，macOS 自带的 bash 3.2 即可运行。不需要 Node、Python、Go、
+           <code>jq</code>，也没有常驻进程。git 2.13+ 即可；git 2.36+ 还能启用 remote 地址规则。</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="links">
+      <a href="https://github.com/sabereey/git-multi-config">GitHub</a>
+      <a href="https://github.com/sabereey/git-multi-config/blob/main/docs/manual.zh-CN.md">中文操作手册</a>
+      <a href="https://github.com/sabereey/git-multi-config/blob/main/docs/manual.md" hreflang="en" lang="en">English Manual</a>
+      <a href="https://github.com/sabereey/git-multi-config/blob/main/CHANGELOG.md">更新日志</a>
+      <a href="https://github.com/sabereey/git-multi-config/blob/main/LICENSE">MIT 许可</a>
+      <a href="../" hreflang="en" lang="en">English</a>
+    </div>
+    <p class="kw">
+      <span>git 多账号</span><span>一台电脑多个 git 账号</span><span>git 按目录切换身份</span><span>includeIf gitdir</span><span>不同仓库不同 SSH 密钥</span><span>git 提交邮箱错误</span><span>公司和个人 git 共存</span><span>core.sshCommand</span><span>git 提交拦截钩子</span>
+    </p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  document.querySelectorAll('button.copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var el = document.querySelector(btn.dataset.copy);
+      if (!el) return;
+      var text = el.textContent.trim();
+      var done = function () {
+        btn.textContent = '已复制';
+        btn.classList.add('done');
+        setTimeout(function () { btn.textContent = '复制'; btn.classList.remove('done'); }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallback(text, done); });
+      } else {
+        fallback(text, done);
+      }
+    });
+  });
+
+  function fallback(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { /* ignore */ }
+    document.body.removeChild(ta);
+  }
+})();
+</script>
+
+</body>
+</html>

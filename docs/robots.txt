@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sabereey.github.io/git-multi-config/sitemap.xml

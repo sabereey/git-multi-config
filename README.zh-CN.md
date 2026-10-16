@@ -13,7 +13,8 @@
 除配置外，它还能**审计存量仓库**的身份是否错配、**改写绕过专用 SSH 别名的 remote**，
 并可选安装**提交前拦截钩子**，阻止用未登记邮箱提交。
 
-[English README](README.md) · **完整手册：[中文操作手册](docs/manual.zh-CN.md) / [English manual](docs/manual.md)**
+[English README](README.md) · **完整手册：[中文操作手册](docs/manual.zh-CN.md) / [English manual](docs/manual.md)** ·
+[**落地页**](https://sabereey.github.io/git-multi-config/zh/)（中文 / [en](https://sabereey.github.io/git-multi-config/)）
 
 **目录** · [它解决什么](#它解决什么) · [环境要求](#环境要求) · [安装](#安装) · [快速开始](#快速开始) ·
 [写入的文件](#它写了哪些文件) · [命令](#命令) · [典型场景](#典型场景) ·

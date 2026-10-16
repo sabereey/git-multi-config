@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directory. A `gitdir:` condition is only evaluated once Git has found a repository, so in
   a plain folder you observe the global default — and identities only matter inside a
   repository anyway.
+- Added an indexable bilingual landing page (`docs/index.html`, `docs/zh/index.html`) with
+  `og:`/`twitter:` cards, JSON-LD `SoftwareApplication` and `FAQPage` structured data,
+  `hreflang` alternates, `robots.txt` and a sitemap, deployed to GitHub Pages by
+  `.github/workflows/pages.yml`.
 
 ## [2.0.0] - 2026-10-16
 

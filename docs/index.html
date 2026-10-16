@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>git-multi-config — set up company and personal multi-account Git on one machine</title>
+<meta name="description" content="One command to set up company and personal multi-account Git on one machine. Auto-switches user.name, user.email and SSH key per directory via includeIf + core.sshCommand, audits existing repositories, and blocks commits made with the wrong email. Zero dependencies, bash 3.2+.">
+<meta name="keywords" content="git multiple accounts, git config per directory, includeIf gitdir, hasconfig remote url, separate SSH key per account, switch git identity automatically, wrong email in commits, company and personal git on one machine, core.sshCommand, git commit guard, git multi account manager">
+<meta name="author" content="sabereey">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#0B0F16">
+
+<link rel="canonical" href="https://sabereey.github.io/git-multi-config/">
+<link rel="alternate" hreflang="en" href="https://sabereey.github.io/git-multi-config/">
+<link rel="alternate" hreflang="zh-CN" href="https://sabereey.github.io/git-multi-config/zh/">
+<link rel="alternate" hreflang="x-default" href="https://sabereey.github.io/git-multi-config/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="git-multi-config">
+<meta property="og:title" content="git-multi-config — company and personal Git on one machine, switched by directory">
+<meta property="og:description" content="One command sets up everything. The directory decides your Git identity and SSH key — no manual switching, ever.">
+<meta property="og:url" content="https://sabereey.github.io/git-multi-config/">
+<meta property="og:image" content="https://sabereey.github.io/git-multi-config/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Terminal showing ~/work/my-service mapped to the company server and ~/personal/dotfiles mapped to GitHub">
+<meta property="og:locale" content="en">
+<meta property="og:locale:alternate" content="zh_CN">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="git-multi-config — company and personal Git on one machine">
+<meta name="twitter:description" content="The directory decides your Git identity and SSH key. No manual switching. Zero dependencies.">
+<meta name="twitter:image" content="https://sabereey.github.io/git-multi-config/social-preview.png">
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230B0F16'/><rect x='9' y='9' width='6' height='6' rx='1.5' fill='%233FB950'/><rect x='17' y='17' width='6' height='6' rx='1.5' fill='%2358A6FF'/></svg>">
+<link rel="stylesheet" href="style.css">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "git-multi-config",
+  "softwareVersion": "2.0.0",
+  "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "Version Control",
+  "operatingSystem": "macOS, Linux, WSL",
+  "programmingLanguage": "Shell",
+  "description": "One command to set up company and personal multi-account Git on one machine. Automatically selects user.name, user.email and SSH key per directory using includeIf conditional includes and core.sshCommand, audits existing repositories, and installs an optional pre-commit guard against committing with the wrong email.",
+  "url": "https://sabereey.github.io/git-multi-config/",
+  "codeRepository": "https://github.com/sabereey/git-multi-config",
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "keywords": "git multiple accounts, git config per directory, includeIf gitdir, separate SSH key per account, core.sshCommand, git commit guard, multi-account git manager",
+  "author": { "@type": "Person", "name": "sabereey", "url": "https://github.com/sabereey" }
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How do I use a different Git identity and SSH key for company and personal repositories on the same machine?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Use Git conditional includes. Map each directory to a profile file with includeIf \"gitdir:<dir>/\" so Git loads a different user.name and user.email depending on where the repository lives, and force the matching SSH key per profile with core.sshCommand. git-multi-config generates all of this from one interactive command, writes the SSH aliases with IdentitiesOnly yes, and audits repositories that already have the wrong local config."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Why does git config user.email still show the wrong address in a folder inside my personal directory?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "That folder is almost certainly not a Git repository. A gitdir: condition is only evaluated once Git has located a repository, because the pattern is matched against the location of the .git directory. In a plain folder no condition matches and you see the global default identity. Run git config --show-origin --get-all user.email from inside a real repository to confirm the conditional include is applied."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does this work with two accounts that both live on github.com?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. When both profiles share a host, the company entry gets a distinct SSH alias such as github.com-work, and the personal side gets github.com-personal. Per-profile core.sshCommand still forces the correct key inside each directory, and audit --fix rewrites remotes that bypass the alias."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens to repositories cloned outside the managed directories?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "They keep the default identity you selected. On Git 2.36 and newer, hasconfig:remote.*.url: rules also match by remote URL, so a company repository cloned elsewhere still picks up the company identity."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does git-multi-config have any runtime dependencies?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. It is a single POSIX-ish bash script that works with the bash 3.2 shipped on macOS. No Node, Python, Go, jq or background daemon. Git 2.13 or newer is required for conditional includes; Git 2.36 or newer additionally enables remote-URL based rules."
+      }
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="dot"></span>git-multi-config</a>
+    <nav class="topnav">
+      <a href="#how">How it works</a>
+      <a href="#compare">Comparison</a>
+      <a href="#faq" class="hide-sm">FAQ</a>
+      <a href="zh/" hreflang="zh-CN" lang="zh-CN">中文</a>
+      <a href="https://github.com/sabereey/git-multi-config">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ============================================================== hero -->
+  <div class="wrap hero">
+    <p class="eyebrow">Multi-account Git, solved</p>
+    <h1>One command sets up company and personal Git on one machine. <span class="soft">The directory decides the identity.</span></h1>
+    <p class="lede">
+      Company work goes to your company Git server with your <strong>company email and company SSH key</strong>.
+      Side projects go to GitHub with your <strong>personal identity</strong>. You never switch anything by hand.
+    </p>
+    <p class="lede sub">
+      It also audits repositories that already have the wrong local config, and can install a pre-commit
+      guard that refuses to commit with an unregistered email.
+    </p>
+
+    <div class="card install">
+      <div class="install-head">
+        <i></i><i></i><i></i>
+        <span>install.sh</span>
+      </div>
+      <div class="install-body">
+        <pre id="cmd">curl -fsSL https://raw.githubusercontent.com/sabereey/git-multi-config/main/install.sh | bash</pre>
+        <button class="copy" data-copy="#cmd">Copy</button>
+      </div>
+    </div>
+
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/sabereey/git-multi-config">View on GitHub</a>
+      <a class="btn ghost" href="https://github.com/sabereey/git-multi-config/blob/main/docs/manual.md">Read the manual</a>
+      <a class="btn ghost" href="https://github.com/sabereey/git-multi-config/blob/main/README.zh-CN.md" hreflang="zh-CN">中文说明</a>
+    </div>
+  </div>
+
+  <!-- ======================================================= the accidents -->
+  <section>
+    <div class="wrap">
+      <h2>The problem</h2>
+      <p class="section-title">Two accounts on one laptop cause three classic accidents.</p>
+
+      <div class="grid c3">
+        <div class="card tile">
+          <span class="bad">git commit</span>
+          <h3>A commit authored with the wrong email</h3>
+          <p>Your company commit carries your personal address, or a public repo shows your work identity. It is
+             recoverable, but only if you notice — and nobody notices.</p>
+        </div>
+        <div class="card tile">
+          <span class="bad">git clone</span>
+          <h3>Permission denied (publickey)</h3>
+          <p>SSH tries your keys in sequence and offers the wrong one. The fix people reach for is reordering
+             <code>~/.ssh/config</code>, which breaks the other repository.</p>
+        </div>
+        <div class="card tile">
+          <span class="bad">git config --local</span>
+          <h3>Thirty old repositories, all wrong</h3>
+          <p>They were cloned before you cared. Each one carries a stale <code>user.email</code>, and fixing them
+             by hand is an afternoon of <code>cd</code> and copy-paste.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= how it works -->
+  <section id="how">
+    <div class="wrap">
+      <h2>How it works</h2>
+      <p class="section-title">Answer eight questions once. Everything after that is automatic and inspectable.</p>
+
+      <div class="panes">
+        <div class="card pane">
+          <div class="pane-head">git-multi-config init</div>
+<pre><span class="d">$</span> <span class="k">git-multi-config init</span>
+
+  Company server   <span class="b">git.corp.example.com</span>
+  Company identity <span class="g">Corp User &lt;dev@corp.example.com&gt;</span>
+  Company dirs     <span class="b">~/work</span>
+  Personal server  <span class="b">github.com</span>
+  Personal identity <span class="g">you &lt;you@example.com&gt;</span>
+  Personal dirs    <span class="b">~/personal</span>
+  Default identity <span class="hi">personal</span>
+  Commit guard     <span class="hi">yes</span>
+
+<span class="d">[ ok ]</span> wrote ~/.ssh/config
+<span class="d">[ ok ]</span> wrote ~/.gitconfig-company
+<span class="d">[ ok ]</span> wrote ~/.gitconfig-personal
+<span class="d">[ ok ]</span> wrote includeIf rules
+<span class="d">[ ok ]</span> installed pre-commit guard</pre>
+        </div>
+
+        <div class="card pane">
+          <div class="pane-head">~/.config/git-multi-config/includeif.conf</div>
+<pre><span class="d"># generated — do not edit by hand</span>
+
+<span class="k">[includeIf "gitdir:~/work/"]</span>
+        path = ~/.gitconfig-company
+
+<span class="k">[includeIf "gitdir:~/personal/"]</span>
+        path = ~/.gitconfig-personal
+
+<span class="d"># git 2.36+: also match by remote URL,</span>
+<span class="d"># so company repos cloned elsewhere still</span>
+<span class="d"># get the company identity</span>
+<span class="k">[includeIf "hasconfig:remote.*.url:git@git.corp.example.com:**"]</span>
+        path = ~/.gitconfig-company</pre>
+        </div>
+      </div>
+
+      <div class="grid c2" style="margin-top:22px">
+        <div class="card tile">
+          <h3>Why <code>core.sshCommand</code>, not just SSH aliases</h3>
+          <p>Aliases only work if you remember to use them. Each profile also sets
+             <code>core.sshCommand</code>, so the correct key is forced inside the directory — even when a remote
+             points straight at the host.</p>
+        </div>
+        <div class="card tile">
+          <h3>Why two rules per directory</h3>
+          <p>Git matches <code>gitdir:</code> against <em>physical</em> paths. On macOS <code>/tmp</code> and
+             <code>/var</code> are symlinks, so a single logical rule silently fails to match. Both forms are written.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ features -->
+  <section>
+    <div class="wrap">
+      <h2>What you get</h2>
+      <p class="section-title">A single bash script. No runtime, no daemon, nothing to keep running.</p>
+
+      <div class="grid c2">
+        <ul class="checks">
+          <li><b>Directory-based switching</b> of <code>user.name</code>, <code>user.email</code> and signing key</li>
+          <li><b>Right SSH key per directory</b> via <code>core.sshCommand</code></li>
+          <li><b>audit</b> finds identity and remote mismatches; <code>audit --fix</code> repairs them</li>
+          <li><b>Commit guard</b> refuses to commit with an email you never registered</li>
+        </ul>
+        <ul class="checks">
+          <li><b>doctor</b> checks git version, files, key permissions, hooks and SSH login</li>
+          <li><b>Idempotent</b> — re-running never duplicates a managed block</li>
+          <li><b>Reversible</b> — <code>uninstall</code> removes everything and restores your previous hooks path</li>
+          <li><b>Bilingual</b> interface and docs, English and 简体中文</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== commands -->
+  <section>
+    <div class="wrap">
+      <h2>Commands</h2>
+      <p class="section-title">Six subcommands, and a test suite that runs in a throwaway <code>$HOME</code>.</p>
+
+      <div class="card table-scroll">
+        <table>
+          <thead>
+            <tr><th>Command</th><th>What it does</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>init</code></td><td>Interactive setup wizard. Accepts <code>--from-file</code> for provisioning a machine non-interactively.</td></tr>
+            <tr><td><code>audit [--fix]</code></td><td>Scans every repository under your managed directories for identity or remote mismatches. Exits non-zero when it finds one, so it works as a CI gate.</td></tr>
+            <tr><td><code>list</code></td><td>Prints the current configuration and the resolved file paths.</td></tr>
+            <tr><td><code>doctor [--ssh]</code></td><td>Checks git version, includes wired up, key permissions, hook health, and optionally SSH authentication.</td></tr>
+            <tr><td><code>uninstall [--restore]</code></td><td>Removes every managed block and restores the previous <code>core.hooksPath</code>.</td></tr>
+            <tr><td><code>help</code></td><td>Usage and options, in English or Chinese.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================== comparison -->
+  <section id="compare">
+    <div class="wrap">
+      <h2>How it compares</h2>
+      <p class="section-title">Hand-written <code>includeIf</code> covers the happy path. This covers the rest.</p>
+
+      <div class="card table-scroll">
+        <table>
+          <thead>
+            <tr><th></th><th>git-multi-config</th><th>Hand-written <code>includeIf</code></th><th>Other account switchers</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Zero dependencies</td><td class="yes">bash only</td><td class="yes">bash only</td><td class="no">often Go / Rust / Node</td></tr>
+            <tr><td>Switch by directory</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">usually manual</td></tr>
+            <tr><td>Right SSH key per directory</td><td class="yes">core.sshCommand</td><td class="no">✗</td><td class="no">via host aliases</td></tr>
+            <tr><td>Audit + repair existing repos</td><td class="yes">✓</td><td class="no">✗</td><td class="no">rarely</td></tr>
+            <tr><td>Commit guard</td><td class="yes">opt-in</td><td class="no">✗</td><td class="no">rarely</td></tr>
+            <tr><td>Symlinked / physical paths</td><td class="yes">✓</td><td class="no">easy to get wrong</td><td class="no">rarely</td></tr>
+            <tr><td>Interactive wizard</td><td class="yes">✓</td><td class="no">✗</td><td class="no">sometimes</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= faq -->
+  <section id="faq">
+    <div class="wrap">
+      <h2>FAQ</h2>
+      <p class="section-title">The questions people actually ask.</p>
+
+      <div class="faq-item">
+        <h3>How do I use a different Git identity and SSH key for company and personal repositories?</h3>
+        <p>Use Git conditional includes. Map each directory to a profile file with
+           <code>includeIf "gitdir:&lt;dir&gt;/"</code>, so Git loads a different <code>user.name</code> and
+           <code>user.email</code> depending on where the repository lives, and force the matching key per profile
+           with <code>core.sshCommand</code>. <code>git-multi-config init</code> generates all of it from one
+           command and audits repositories you already have.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Why does <code>git config user.email</code> still show the wrong address in a folder under my personal directory?</h3>
+        <p>That folder is almost certainly not a repository. A <code>gitdir:</code> condition is only evaluated once
+           Git has <em>found</em> a repository — the pattern is matched against the location of the
+           <code>.git</code> directory — so in a plain folder nothing matches and you see the global default. Check
+           from inside a real one:</p>
+<pre>cd ~/Documents/some-project
+git config --show-origin --get-all user.email
+#   file:~/.gitconfig            &lt;your default&gt;
+#   file:~/.gitconfig-personal   you@example.com   ← conditional include applied</pre>
+      </div>
+
+      <div class="faq-item">
+        <h3>Both my accounts live on github.com. Does that work?</h3>
+        <p>Yes. The company entry gets a distinct alias such as <code>github.com-work</code> and the personal side gets
+           <code>github.com-personal</code>. Per-profile <code>core.sshCommand</code> still forces the correct key
+           inside each directory, and <code>audit --fix</code> rewrites remotes that bypass the alias.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>What about repositories cloned outside the managed directories?</h3>
+        <p>They keep the default identity you selected. On Git 2.36+ the
+           <code>hasconfig:remote.*.url:</code> rules also match by remote URL, so a company repository cloned
+           elsewhere still picks up the company identity.</p>
+      </div>
+
+      <div class="faq-item">
+        <h3>Any runtime dependencies?</h3>
+        <p>No. One bash script, working with the bash 3.2 that ships on macOS. No Node, Python, Go, <code>jq</code>
+           or background daemon. Git 2.13+ is required; Git 2.36+ additionally enables the remote-URL rules.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="links">
+      <a href="https://github.com/sabereey/git-multi-config">GitHub</a>
+      <a href="https://github.com/sabereey/git-multi-config/blob/main/docs/manual.md">Manual</a>
+      <a href="https://github.com/sabereey/git-multi-config/blob/main/docs/manual.zh-CN.md" hreflang="zh-CN" lang="zh-CN">中文操作手册</a>
+      <a href="https://github.com/sabereey/git-multi-config/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/sabereey/git-multi-config/blob/main/LICENSE">MIT License</a>
+      <a href="zh/" hreflang="zh-CN" lang="zh-CN">中文</a>
+    </div>
+    <p class="kw">
+      <span>git multiple accounts</span><span>git config per directory</span><span>includeIf gitdir</span><span>hasconfig remote url</span><span>separate SSH key per account</span><span>switch git identity automatically</span><span>wrong email in commits</span><span>company and personal git on one machine</span><span>core.sshCommand</span><span>git commit guard</span>
+    </p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  document.querySelectorAll('button.copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var el = document.querySelector(btn.dataset.copy);
+      if (!el) return;
+      var text = el.textContent.trim();
+      var done = function () {
+        btn.textContent = 'Copied';
+        btn.classList.add('done');
+        setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallback(text, done); });
+      } else {
+        fallback(text, done);
+      }
+    });
+  });
+
+  function fallback(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { /* ignore */ }
+    document.body.removeChild(ta);
+  }
+})();
+</script>
+
+</body>
+</html>

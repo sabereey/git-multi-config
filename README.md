@@ -19,7 +19,8 @@ It also **audits existing repositories** for identity mismatches, **rewrites rem
 your dedicated SSH alias, and can install a **pre-commit guard** that refuses to commit with an
 unregistered email.
 
-English | [中文说明](README.zh-CN.md) · **Manual: [English](docs/manual.md) / [中文操作手册](docs/manual.zh-CN.md)**
+English | [中文说明](README.zh-CN.md) · **Manual: [English](docs/manual.md) / [中文操作手册](docs/manual.zh-CN.md)** ·
+[**Landing page**](https://sabereey.github.io/git-multi-config/) (en / [zh](https://sabereey.github.io/git-multi-config/zh/))
 
 **Contents** · [Why](#why) · [Requirements](#requirements) · [Install](#install) · [Quick start](#quick-start) ·
 [What it writes](#what-it-writes) · [Commands](#commands) · [Use cases](#use-cases) ·
