@@ -11,13 +11,19 @@ Side projects go to GitHub with your personal identity.
 You never switch anything by hand — the directory decides.
 
 ```
-~/work/my-service   →  git@git.corp.com:team/my-service.git   (you@corp.com, company key)
+~/work/my-service   →  git@git.corp.com:team/my-service.git   (dev@corp.com, company key)
 ~/personal/dotfiles →  git@github.com:you/dotfiles.git        (you@example.com, personal key)
 ```
 
 It also **audits existing repositories** for identity mismatches, **rewrites remotes** that bypass
 your dedicated SSH alias, and can install a **pre-commit guard** that refuses to commit with an
 unregistered email.
+
+English | [中文说明](README.zh-CN.md) · **Manual: [English](docs/manual.md) / [中文操作手册](docs/manual.zh-CN.md)**
+
+**Contents** · [Why](#why) · [Requirements](#requirements) · [Install](#install) · [Quick start](#quick-start) ·
+[What it writes](#what-it-writes) · [Commands](#commands) · [Use cases](#use-cases) ·
+[Commit guard](#the-commit-guard-optional) · [Comparison](#how-it-compares) · [FAQ](#faq)
 
 ---
 
@@ -68,10 +74,10 @@ personal key, personal name/email, personal dirs, default identity. Then:
 
 ```
   Company server   git.corp.com  (alias: git.corp.com)
-  Company identity Corp Wang <wang@corp.com>
+  Company identity Corp User <dev@corp.com>
   Company dirs     /Users/you/work
   Personal server  github.com
-  Personal identity Jiwei <me@example.com>
+  Personal identity Personal User <you@example.com>
   Personal dirs    /Users/you/personal
   Default identity personal
   Commit guard     yes
@@ -86,8 +92,8 @@ git-multi-config audit --fix
 Verify inside a repo:
 
 ```bash
-cd ~/work/anything && git config user.email   # → wang@corp.com
-cd ~/personal/anything && git config user.email  # → me@example.com
+cd ~/work/anything && git config user.email   # → dev@corp.com
+cd ~/personal/anything && git config user.email  # → you@example.com
 ```
 
 ---
@@ -133,12 +139,12 @@ Options: `--from-file <file>`, `-y`, `--lang zh\|en`, `--with-hooks`, `--fix`, `
 cat > answers.conf <<'EOF'
 COMPANY_HOST=git.corp.com
 COMPANY_KEY=~/.ssh/id_ed25519_company
-COMPANY_NAME=Corp Wang
-COMPANY_EMAIL=wang@corp.com
+COMPANY_NAME=Corp User
+COMPANY_EMAIL=dev@corp.com
 COMPANY_DIRS=~/work:~/clients
 PERSONAL_KEY=~/.ssh/id_ed25519
-PERSONAL_NAME=Jiwei
-PERSONAL_EMAIL=me@example.com
+PERSONAL_NAME=Personal User
+PERSONAL_EMAIL=you@example.com
 PERSONAL_DIRS=~/personal
 DEFAULT_ID=personal
 INSTALL_HOOKS=1
@@ -162,12 +168,26 @@ that compares `git config user.email` against your two registered emails and ref
 
 ```
 [git-multi-config] Refusing to commit with wrong@example.com
-[git-multi-config] Registered / 已登记: wang@corp.com me@example.com
+[git-multi-config] Registered / 已登记: dev@corp.com you@example.com
 [git-multi-config] Bypass: GMC_ALLOW_ANY=1 git commit ...
 ```
 
 It is skipped automatically if `core.hooksPath` already points somewhere else (so Husky etc. keep
 working), and it never touches repository-local hooks.
+
+---
+
+## Use cases
+
+| Situation | What you do |
+|---|---|
+| Company GitLab/Gitea plus personal GitHub | `init`, two dirs, done |
+| Both accounts on github.com | `init` detects it and creates the `github-work` alias |
+| Dozens of existing repos with stale local config | `audit --fix` |
+| Company repos cloned by accident outside the managed tree | git 2.36+ remote-URL rules, or `audit` reports them |
+| Freelance / client work needs a third identity | put the repo under the client directory and point local config at it, or run a second configuration with `GMC_HOME` |
+| Wrong email already reached a public repo | fix identity first (`audit`), then rotate the address or rewrite history |
+| Setting up a new laptop | carry `answers.conf` and run `init --from-file answers.conf --yes` |
 
 ---
 
@@ -227,8 +247,16 @@ make install
 The smoke suite covers the wizard, identity switching, the commit guard, audit + repair, idempotent
 re-runs and uninstall, on both a private-server and a shared-host layout.
 
+Full documentation: [Operations Manual](docs/manual.md) — wizard walkthrough, every command,
+cookbooks, troubleshooting table, design notes.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
 
-[中文文档](README.zh-CN.md)
+English | [中文说明](README.zh-CN.md) · [中文操作手册](docs/manual.zh-CN.md)
+
+<sub>git multiple accounts · git config per directory · includeIf gitdir · hasconfig remote url ·
+separate SSH key per account · switch git identity automatically · wrong email in commits ·
+company and personal git on one machine · core.sshCommand · git commit guard</sub>
+

@@ -57,14 +57,14 @@ chmod 600 "$HOME/.ssh/id_ed25519_company" "$HOME/.ssh/id_ed25519"
 cat > "$WORK/answers.conf" <<'EOF'
 COMPANY_HOST=git.corp.example.com
 COMPANY_KEY=~/.ssh/id_ed25519_company
-COMPANY_NAME=Corp Wang
-COMPANY_EMAIL=wang@corp.example.com
+COMPANY_NAME=Corp User
+COMPANY_EMAIL=dev@corp.example.com
 COMPANY_GPG=
 COMPANY_DIRS=~/work
 PERSONAL_HOST=github.com
 PERSONAL_KEY=~/.ssh/id_ed25519
-PERSONAL_NAME=Jiwei
-PERSONAL_EMAIL=me@example.com
+PERSONAL_NAME=Personal User
+PERSONAL_EMAIL=you@example.com
 PERSONAL_GPG=
 PERSONAL_DIRS=~/personal
 DEFAULT_ID=personal
@@ -98,8 +98,8 @@ assert_eq "$(git config --global core.hooksPath)" "$HOME/.config/git-multi-confi
 # 身份自动切换
 git -C "$HOME/work" init -q repo-a
 git -C "$HOME/personal" init -q repo-b
-assert_eq "$(git -C "$HOME/work/repo-a" config user.email)" "wang@corp.example.com" "company dir → company email"
-assert_eq "$(git -C "$HOME/personal/repo-b" config user.email)" "me@example.com" "personal dir → personal email"
+assert_eq "$(git -C "$HOME/work/repo-a" config user.email)" "dev@corp.example.com" "company dir → company email"
+assert_eq "$(git -C "$HOME/personal/repo-b" config user.email)" "you@example.com" "personal dir → personal email"
 
 # 提交前拦截钩子
 git -C "$HOME/work/repo-a" config --local user.email "wrong@personal.example.com"
@@ -120,7 +120,7 @@ else
 fi
 "$TOOL_BASH" "$SCRIPT" audit --fix --yes --lang en > "$WORK/audit2.log" 2>&1 \
   && pass "audit --fix exits 0" || { fail "audit --fix exits 0"; cat "$WORK/audit2.log"; }
-assert_eq "$(git -C "$HOME/work/repo-a" config user.email)" "wang@corp.example.com" "audit --fix restores correct identity"
+assert_eq "$(git -C "$HOME/work/repo-a" config user.email)" "dev@corp.example.com" "audit --fix restores correct identity"
 if "$TOOL_BASH" "$SCRIPT" audit --lang en > "$WORK/audit3.log" 2>&1; then
   pass "audit clean after fix"
 else
@@ -135,7 +135,7 @@ else
 fi
 assert_contains "$WORK/doctor.log" "state.conf" "doctor reports state"
 "$TOOL_BASH" "$SCRIPT" list --lang en > "$WORK/list.log" 2>&1 && pass "list exits 0" || fail "list exits 0"
-assert_contains "$WORK/list.log" "wang@corp.example.com" "list shows company identity"
+assert_contains "$WORK/list.log" "dev@corp.example.com" "list shows company identity"
 
 # 幂等：重复 init 不应产生重复块
 RULES_BEFORE="$(grep -c 'includeIf' "$HOME/.config/git-multi-config/includeif.conf")"
@@ -168,13 +168,13 @@ chmod 600 "$HOME/.ssh/id_ed25519_company" "$HOME/.ssh/id_ed25519"
 cat > "$WORK/answers.conf" <<'EOF'
 COMPANY_HOST=github.com
 COMPANY_KEY=~/.ssh/id_ed25519_company
-COMPANY_NAME=Corp Wang
-COMPANY_EMAIL=wang@corp.example.com
+COMPANY_NAME=Corp User
+COMPANY_EMAIL=dev@corp.example.com
 COMPANY_DIRS=~/work
 PERSONAL_HOST=github.com
 PERSONAL_KEY=~/.ssh/id_ed25519
-PERSONAL_NAME=Jiwei
-PERSONAL_EMAIL=me@example.com
+PERSONAL_NAME=Personal User
+PERSONAL_EMAIL=you@example.com
 PERSONAL_DIRS=~/personal
 DEFAULT_ID=personal
 INSTALL_HOOKS=0
@@ -188,7 +188,7 @@ assert_eq "$(git config --global core.hooksPath 2>/dev/null || echo none)" "none
 
 # 身份仍然按目录切换（同域名场景由 core.sshCommand 保证密钥正确）
 git -C "$HOME/work" init -q repo-c
-assert_eq "$(git -C "$HOME/work/repo-c" config user.email)" "wang@corp.example.com" "company dir → company email (same host)"
+assert_eq "$(git -C "$HOME/work/repo-c" config user.email)" "dev@corp.example.com" "company dir → company email (same host)"
 assert_contains "$HOME/.gitconfig-company" "id_ed25519_company" "company key forced via sshCommand"
 
 # remote 未使用别名时 audit 应报告并可修复
@@ -216,12 +216,12 @@ chmod 600 "$HOME/.ssh/id_ed25519_company" "$HOME/.ssh/id_ed25519"
 cat > "$WORK/answers.conf" <<'EOF'
 COMPANY_HOST=git.corp.example.com
 COMPANY_KEY=~/.ssh/id_ed25519_company
-COMPANY_NAME=Corp Wang
-COMPANY_EMAIL=wang@corp.example.com
+COMPANY_NAME=Corp User
+COMPANY_EMAIL=dev@corp.example.com
 COMPANY_DIRS=~/work/main,~/work with space
 PERSONAL_KEY=~/.ssh/id_ed25519
-PERSONAL_NAME=Jiwei
-PERSONAL_EMAIL=me@example.com
+PERSONAL_NAME=Personal User
+PERSONAL_EMAIL=you@example.com
 PERSONAL_DIRS=~/personal
 DEFAULT_ID=company
 INSTALL_HOOKS=0
@@ -232,12 +232,12 @@ EOF
 
 assert_contains "$HOME/.config/git-multi-config/includeif.conf" "gitdir:$HOME/work/main/" "first company dir rule"
 assert_contains "$HOME/.config/git-multi-config/includeif.conf" "gitdir:$HOME/work with space/" "dir with space kept intact"
-assert_eq "$(git config --global user.email)" "wang@corp.example.com" "default identity = company"
+assert_eq "$(git config --global user.email)" "dev@corp.example.com" "default identity = company"
 
 git -C "$HOME/work with space" init -q repo-d
 git -C "$HOME/personal" init -q repo-e
-assert_eq "$(git -C "$HOME/work with space/repo-d" config user.email)" "wang@corp.example.com" "space dir → company email"
-assert_eq "$(git -C "$HOME/personal/repo-e" config user.email)" "me@example.com" "personal dir → personal email (default company)"
+assert_eq "$(git -C "$HOME/work with space/repo-d" config user.email)" "dev@corp.example.com" "space dir → company email"
+assert_eq "$(git -C "$HOME/personal/repo-e" config user.email)" "you@example.com" "personal dir → personal email (default company)"
 
 if "$TOOL_BASH" "$SCRIPT" audit --lang en > "$WORK/audit.log" 2>&1; then
   pass "audit clean with multiple dirs"

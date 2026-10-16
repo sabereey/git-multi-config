@@ -6,14 +6,18 @@
 不需要手动切换——**目录决定身份**。
 
 ```
-~/work/my-service   →  git@git.corp.com:team/my-service.git   （wang@corp.com + 公司密钥）
-~/personal/dotfiles →  git@github.com:you/dotfiles.git        （me@example.com + 个人密钥）
+~/work/my-service   →  git@git.corp.com:team/my-service.git   （dev@corp.com + 公司密钥）
+~/personal/dotfiles →  git@github.com:you/dotfiles.git        （you@example.com + 个人密钥）
 ```
 
 除配置外，它还能**审计存量仓库**的身份是否错配、**改写绕过专用 SSH 别名的 remote**，
 并可选安装**提交前拦截钩子**，阻止用未登记邮箱提交。
 
-[English README](README.md)
+[English README](README.md) · **完整手册：[中文操作手册](docs/manual.zh-CN.md) / [English manual](docs/manual.md)**
+
+**目录** · [它解决什么](#它解决什么) · [环境要求](#环境要求) · [安装](#安装) · [快速开始](#快速开始) ·
+[写入的文件](#它写了哪些文件) · [命令](#命令) · [典型场景](#典型场景) ·
+[提交拦截钩子](#提交拦截钩子可选) · [常见问题](#常见问题) · [开发](#开发)
 
 ---
 
@@ -133,6 +137,20 @@ git-multi-config audit || echo "有仓库身份不对"
 
 ---
 
+## 典型场景
+
+| 你的情况 | 怎么做 |
+|---|---|
+| 公司 GitLab/Gitea + 个人 GitHub | `init` 填两个目录，完成 |
+| 公司和个人都用 github.com | `init` 自动识别并生成 `github-work` 别名 |
+| 已有几十个仓库带着错误的本地配置 | `audit --fix` |
+| 公司仓库被 clone 到了受管目录之外 | git 2.36+ 由 remote 规则覆盖；否则 `audit` 会报出来 |
+| 需要第三套身份（外包/客户项目） | 把仓库放进对应目录并设置本地配置，或用 `GMC_HOME` 跑第二套配置 |
+| 错误邮箱已经推到公开仓库 | 先修身份（`audit`），再轮换邮箱地址或重写历史 |
+| 换新笔记本 | 带上 `answers.conf`，执行 `init --from-file answers.conf --yes` |
+
+---
+
 ## 常见问题
 
 **`~/.ssh/config` 里已经有 `Host github.com` 了怎么办？**
@@ -163,6 +181,14 @@ make lint     # shellcheck
 make install
 ```
 
+完整文档见[中文操作手册](docs/manual.zh-CN.md)——包含向导逐项说明、全部命令、场景教程、故障排查表与设计说明。
+
 ## 许可证
 
 MIT，见 [LICENSE](LICENSE)。
+
+[English README](README.md) · [English manual](docs/manual.md)
+
+<sub>多个 git 账号 · 按目录切换 git 身份 · includeIf gitdir · hasconfig remote url · 每个账号独立 SSH 密钥 ·
+提交邮箱用错 · 公司和个人项目同机管理 · core.sshCommand · 提交前身份校验</sub>
+
