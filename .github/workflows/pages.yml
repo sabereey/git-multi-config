@@ -1,5 +1,13 @@
 name: Pages
 
+# Deploys docs/ to GitHub Pages.
+#
+# One-time requirement (Settings → Pages → Build and deployment):
+#   Source: GitHub Actions
+#
+# After that, every push that touches docs/ redeploys automatically.
+# You can also re-run it manually from Actions → Pages → Run workflow.
+
 on:
   push:
     branches: [main]
@@ -33,10 +41,9 @@ jobs:
           echo "--- site contents ---"
           find _site -type f | sort
 
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
+      # No actions/configure-pages here on purpose: enabling Pages from a
+      # workflow needs admin rights the GITHUB_TOKEN does not have. Absolute
+      # URLs are hardcoded in the pages, so no site metadata is needed.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
