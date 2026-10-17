@@ -7,17 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-17
+
+Nine issues from an external code review were reproduced on a real machine first, then
+fixed. Two of the reported findings did not hold up and are documented as such in the
+review response; three of the real ones turned out to be worse than reported.
+
 ### Fixed
 
-- The smoke suite now isolates `XDG_CONFIG_HOME` and the `GMC_*` variables, not only
-  `HOME`. The config directory resolves through `XDG_CONFIG_HOME`, so on a runner that
-  presets it the generated files landed outside the throwaway `HOME`; every path
-  assertion then missed and an unguarded `grep` aborted the run. CI is green on both
-  Ubuntu and macOS again.
-- Test failures now print the relevant log and emit a GitHub Actions annotation, so a
-  failure is diagnosable without access to the job log.
-- Guarded command substitutions in the test suite so a single missing file can no
-  longer abort the whole run.
+- **`IdentityFile` is now quoted in `~/.ssh/config`** (all three places, not the two the
+  review mentioned). A key path containing a space made ssh report
+  `keyword identityfile extra arguments at end of line` and then
+  `terminating, 1 bad configuration options` — that aborts the **whole** config file, so
+  every unrelated host the user had configured stopped working, not just the two managed
+  ones. Paths are passed through unchanged by `expand_path`, so `~/My Keys/id_ed25519`
+  reaches the writer verbatim.
+- **`audit` no longer dies silently.** `scan_repos` discarded `find`'s stderr, and with
+  `pipefail` a `find` that could not read *any* subdirectory aborted `cmd_audit` before it
+  printed a single line — zero bytes of output, exit code 1. An unreadable directory under
+  a managed folder (a mount point, another user's directory) was enough to trigger it. The
+  error is now surfaced per path and the scan continues.
+- **`--depth` is validated.** `abc` and `2.5` used to produce empty output with exit code
+  1; `0` and `-1` were accepted by BSD `find` and silently scanned nothing. All four now
+  fail with a readable message.
+- **The commit guard no longer blocks legitimate commits.** It parsed the two registered
+  addresses out of `state.conf` with `sed`, which strips quotes but does not undo the
+  backslash escaping that `printf '%q'` puts there. Registered addresses containing `!`,
+  `'`, a space or `$` were therefore read back mangled and every commit was refused. The
+  guard now asks `git config --file` for the two addresses, which uses the ini parser and
+  has no quoting problem at all; the comparison is exact instead of a glob match.
+  Addresses made only of characters `%q` leaves alone (`+`, `@`, `.`, `-`, `_`) were never
+  affected.
+- **`PERSONAL_DIRS` is validated.** A value consisting only of separators (`:`, `::`,
+  `,,`, `;`) normalised to an empty string *after* the default-value fallback had already
+  run, producing zero personal rules while still reporting "auto-switch rules active". It
+  now fails with a message that points at the real cause. The completely empty value was
+  never the problem — it correctly falls back to `~/personal`.
+- **`init` warns when git is older than 2.36.** The `hasconfig:` remote-URL rules were
+  skipped without a word; only `doctor` mentioned it. The warning now appears at the end of
+  `init`, where the user is actually reading output.
+- **`--lang` is position independent.** `audit --depth abc --lang en` reported the error in
+  Chinese because arguments were processed left to right. `--lang` is now pre-scanned.
+
+### Security
+
+- **`load_state` parses `state.conf` instead of sourcing it.** Sourcing turned a data file
+  into executable code: a planted `state.conf` (reachable through a redirected
+  `GMC_HOME`/`XDG_CONFIG_HOME`) ran arbitrary commands with the user's privileges. The file
+  is now read line by line, unknown keys are ignored, and values are decoded from
+  `printf '%q'` form by a small pure-bash decoder — no `eval`, no `.`. Verified against 20
+  values including empty strings, quotes, backticks, `$(...)` and non-ASCII paths.
+- **`install.sh` can verify the download.** Set `GMC_SHA256=<hash>` to make the installer
+  refuse a mismatch; without it the digest is printed so it can be pinned next time. A
+  downloaded file that does not start with a bash shebang is rejected outright.
 
 ### Documentation
 
@@ -33,6 +75,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `og:`/`twitter:` cards, JSON-LD `SoftwareApplication` and `FAQPage` structured data,
   `hreflang` alternates, `robots.txt` and a sitemap, deployed to GitHub Pages by
   `.github/workflows/pages.yml`.
+
+### Tests
+
+- New `scenario D` in the smoke suite pins every one of the fixes above (15 assertions), so
+  a regression is caught instead of shipped. Suite is now 63 assertions, green on bash
+  3.2.57.
 
 ## [2.0.0] - 2026-10-16
 
@@ -95,5 +143,6 @@ single-file prototype, keeping the same idea — the directory decides your iden
 - Multi-byte characters immediately following a variable no longer break parsing on
   bash 3.2.
 
-[Unreleased]: https://github.com/sabereey/git-multi-config/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/sabereey/git-multi-config/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/sabereey/git-multi-config/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/sabereey/git-multi-config/releases/tag/v2.0.0

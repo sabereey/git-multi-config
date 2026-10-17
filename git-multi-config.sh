@@ -3,13 +3,13 @@
 # git-multi-config — 一台机器上管理「公司 Git 私服 + 个人 GitHub」多账号环境
 # Manage company / personal multi-account Git setups on one machine.
 #
-# version: 2.0.0   license: MIT
+# version: 2.0.1   license: MIT
 # requires: bash 3.2+, git 2.13+ (2.36+ enables remote-URL based rules)
 # tested on: macOS (system bash 3.2) / Linux / WSL
 #
 set -euo pipefail
 
-VERSION="2.0.0"
+VERSION="2.0.1"
 PROG="git-multi-config"
 
 # ---------------------------------------------------------------------------
@@ -130,6 +130,9 @@ m() {
     warn_host_conflict)    printf '%s' "an existing Host entry for this host appears BEFORE the managed block in SSH config; SSH key selection is still forced per directory via core.sshCommand|SSH 配置中该 Host 已有更靠前的条目，密钥选择仍由目录级的 core.sshCommand 强制保证";;
     warn_hooks_conflict)   printf '%s' "core.hooksPath already points elsewhere, guard skipped|core.hooksPath 已指向别处，已跳过钩子安装";;
     warn_no_repos)         printf '%s' "No git repositories found under managed dirs|受管目录下未找到 git 仓库";;
+    warn_scan)             printf '%s' "cannot read, skipped|无法读取，已跳过";;
+    warn_no_hasconfig)     printf '%s' "git is older than 2.36, remote-URL rules are skipped|git 低于 2.36，按 remote 地址判定的规则已跳过";;
+    warn_no_hasconfig_hint) printf '%s' "repos outside managed dirs will not switch identity by remote URL|受管目录之外的仓库不会按 remote 地址自动切换身份";;
 
     err_need_tty)          printf '%s' "Not an interactive terminal, use --from-file|非交互环境，请使用 --from-file";;
     err_required)          printf '%s' "required value|必填";;
@@ -138,6 +141,8 @@ m() {
     err_unknown_opt)       printf '%s' "Unknown option|未知选项";;
     err_from_file)         printf '%s' "Answer file not found|答案文件不存在";;
     err_git_old)           printf '%s' "git too old for includeIf, need 2.13+|git 版本过低，includeIf 需要 2.13+";;
+    err_depth)             printf '%s' "positive integer required|需要正整数";;
+    err_dirs_empty)        printf '%s' "no valid directory given, only separators?|未提供有效目录，是否只填了分隔符？";;
 
     next_title)            printf '%s' "Next steps|下一步";;
     next_1)                printf '%s' "Check auto-switch inside a repo under|在以下目录里的仓库验证自动切换";;
@@ -216,6 +221,63 @@ expand_path() {
 }
 
 shell_quote() { printf '%q' "$1"; }
+
+# shell_quote 的逆运算：解码 printf '%q' 的输出。
+# load_state 以前直接用 . 执行 state.conf，等于把状态文件当代码跑（见 SEC-1）；
+# 改成逐行解析 + 解码之后，文件里即使写了 $(...) 也只会变成普通字符串。
+# 用纯 bash 逐字符解码，不用 sed：BSD sed 的 BRE 会把 \\( 当成字面括号，
+# 同样的写法在 GNU sed 下能用、在 macOS 上却静默失效。
+unquote_q() {
+  local s="$1" out="" c digits
+  case "$s" in
+    "''") printf '%s' ""; return 0 ;;
+  esac
+  # $'...' 形式（原值含控制字符时 %q 会这样输出）：先脱壳，再按转义解码
+  if [ "${#s}" -ge 3 ] && [ "${s:0:2}" = "\$'" ] && [ "${s:$((${#s} - 1)):1}" = "'" ]; then
+    s="${s:2}"
+    s="${s:0:$((${#s} - 1))}"
+    while [ -n "$s" ]; do
+      c="${s:0:1}"; s="${s:1}"
+      if [ "$c" = "\\" ] && [ -n "$s" ]; then
+        c="${s:0:1}"; s="${s:1}"
+        case "$c" in
+          n) out="$out
+" ;;
+          t) out="$out	" ;;
+          r) out="$out$(printf '\r')" ;;
+          a) out="$out$(printf '\a')" ;;
+          b) out="$out$(printf '\b')" ;;
+          f) out="$out$(printf '\f')" ;;
+          v) out="$out$(printf '\v')" ;;
+          [0-7])
+            digits="$c"
+            while [ "${#digits}" -lt 3 ]; do
+              c="${s:0:1}"
+              case "$c" in
+                [0-7]) digits="$digits$c"; s="${s:1}" ;;
+                *) break ;;
+              esac
+            done
+            out="$out$(printf "\\$digits")"
+            ;;
+          *) out="$out$c" ;;
+        esac
+      else
+        out="$out$c"
+      fi
+    done
+  else
+    # 反斜杠转义形式：\X -> X（反斜杠自身写作 \\）
+    while [ -n "$s" ]; do
+      c="${s:0:1}"; s="${s:1}"
+      if [ "$c" = "\\" ] && [ -n "$s" ]; then
+        c="${s:0:1}"; s="${s:1}"
+      fi
+      out="$out$c"
+    done
+  fi
+  printf '%s' "$out"
+}
 
 # 解析符号链接后的物理路径（目录不存在时原样返回）
 # git 的 gitdir 匹配基于物理路径，macOS 上 /var、/tmp 等均为软链，故需两种形式都写入
@@ -424,6 +486,17 @@ require_email() {
   esac
 }
 
+# 只接受 >=1 的十进制整数。--depth 的值会直接进 find -maxdepth，
+# 传 abc / 2.5 会被 find 拒绝并使调用方静默中止；0 与负数会被 BSD find 静默接受
+# 却扫不到东西（见 BUG-4）
+require_positive_int() { # $1=value $2=label
+  case "${1:-}" in
+    ''|*[!0-9]*) err "$2: $(t err_depth) (${1:-})"; return 1 ;;
+  esac
+  if [ "$1" -lt 1 ]; then err "$2: $(t err_depth) ($1)"; return 1; fi
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # state
 # ---------------------------------------------------------------------------
@@ -433,10 +506,39 @@ load_state() {
   PERSONAL_HOST="github.com"; PERSONAL_ALIAS="github.com"; PERSONAL_KEY=""; PERSONAL_NAME=""
   PERSONAL_EMAIL=""; PERSONAL_GPG=""; PERSONAL_DIRS=""
   DEFAULT_ID="personal"; HOOKS_INSTALLED="0"; HOOKS_PREV_PATH=""
-  if [ -f "$STATE_FILE" ]; then
-    # shellcheck disable=SC1090
-    . "$STATE_FILE"
-  fi
+  [ -f "$STATE_FILE" ] || return 0
+  # 逐行解析，不再 source：状态文件是数据，不是代码（见 SEC-1）。
+  # 未知键直接忽略 —— 以前它们会被 shell 当成命令执行。
+  local line key val
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ''|'#'*) continue ;;
+      *=*) ;;
+      *) continue ;;
+    esac
+    key="${line%%=*}"
+    val="$(unquote_q "${line#*=}")"
+    case "$key" in
+      COMPANY_HOST)    COMPANY_HOST="$val" ;;
+      COMPANY_ALIAS)   COMPANY_ALIAS="$val" ;;
+      COMPANY_KEY)     COMPANY_KEY="$val" ;;
+      COMPANY_NAME)    COMPANY_NAME="$val" ;;
+      COMPANY_EMAIL)   COMPANY_EMAIL="$val" ;;
+      COMPANY_GPG)     COMPANY_GPG="$val" ;;
+      COMPANY_DIRS)    COMPANY_DIRS="$val" ;;
+      PERSONAL_HOST)   PERSONAL_HOST="$val" ;;
+      PERSONAL_ALIAS)  PERSONAL_ALIAS="$val" ;;
+      PERSONAL_KEY)    PERSONAL_KEY="$val" ;;
+      PERSONAL_NAME)   PERSONAL_NAME="$val" ;;
+      PERSONAL_EMAIL)  PERSONAL_EMAIL="$val" ;;
+      PERSONAL_GPG)    PERSONAL_GPG="$val" ;;
+      PERSONAL_DIRS)   PERSONAL_DIRS="$val" ;;
+      DEFAULT_ID)      DEFAULT_ID="$val" ;;
+      HOOKS_INSTALLED) HOOKS_INSTALLED="$val" ;;
+      HOOKS_PREV_PATH) HOOKS_PREV_PATH="$val" ;;
+      *) : ;;
+    esac
+  done < "$STATE_FILE"
 }
 
 save_state() {
@@ -478,7 +580,10 @@ write_ssh_config() {
   chmod 700 "$dir" 2>/dev/null || true
   remove_managed_block "$SSH_CONFIG" "$MARK_BEGIN" "$MARK_END"
 
-  body="$(printf '# company git server\nHost %s\n    HostName %s\n    User git\n    IdentityFile %s\n    IdentitiesOnly yes\n\n# personal git host\nHost %s\n    HostName %s\n    User git\n    IdentityFile %s\n    IdentitiesOnly yes' \
+  # IdentityFile 的路径必须加引号：含空格的密钥路径会让 sshd_config 解析器直接
+  # 报 "keyword identityfile extra arguments at end of line" 并放弃整份 config，
+  # 连用户已有的其他 Host 一起失效（见 BUG-1）
+  body="$(printf '# company git server\nHost %s\n    HostName %s\n    User git\n    IdentityFile "%s"\n    IdentitiesOnly yes\n\n# personal git host\nHost %s\n    HostName %s\n    User git\n    IdentityFile "%s"\n    IdentitiesOnly yes' \
     "$COMPANY_ALIAS" "$COMPANY_HOST" "$COMPANY_KEY" \
     "$PERSONAL_ALIAS" "$PERSONAL_HOST" "$PERSONAL_KEY")"
 
@@ -489,7 +594,7 @@ write_ssh_config() {
 Host ${PERSONAL_HOST}-personal
     HostName $PERSONAL_HOST
     User git
-    IdentityFile $PERSONAL_KEY
+    IdentityFile "$PERSONAL_KEY"
     IdentitiesOnly yes"
   fi
 
@@ -570,19 +675,30 @@ install_hooks() {
 # git-multi-config — pre-commit identity guard
 # 临时跳过 / bypass: GMC_ALLOW_ANY=1 git commit ...
 if [ "${GMC_ALLOW_ANY:-0}" = "1" ]; then exit 0; fi
-STATE="${GMC_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/git-multi-config}/state.conf"
-if [ ! -f "$STATE" ]; then exit 0; fi
-company="$(sed -n "s/^COMPANY_EMAIL=['\"]\{0,1\}\([^'\"]*\).*/\1/p" "$STATE")"
-personal="$(sed -n "s/^PERSONAL_EMAIL=['\"]\{0,1\}\([^'\"]*\).*/\1/p" "$STATE")"
-allowed=" $company $personal "
+
+# 登记邮箱向 git 索取，而不是解析 state.conf。
+# state.conf 的值经 printf '%q' 转义（如 o\'brien@example.com、a\!b@example.com），
+# 用 sed 剥引号却不反转义会把邮箱解析成 o\ / a\!b@... ，于是合法提交被误拦（见 BUG-2）。
+# git config --file 走 ini 解析器，不存在 shell 引号与转义问题。
 email="$(git config user.email 2>/dev/null || true)"
-case "$allowed" in
-  *" $email "*) exit 0 ;;
-esac
+if [ -z "$email" ]; then exit 0; fi
+
+registered=""
+for f in "$HOME/.gitconfig-company" "$HOME/.gitconfig-personal"; do
+  [ -f "$f" ] || continue
+  cand="$(git config --file "$f" user.email 2>/dev/null || true)"
+  [ -n "$cand" ] || continue
+  if [ "$email" = "$cand" ]; then exit 0; fi
+  registered="$registered $cand"
+done
+
+# 一个登记邮箱都没读到（尚未 init，或配置文件被清掉）时放行，避免误拦
+if [ -z "$registered" ]; then exit 0; fi
+
 printf '\n' >&2
 printf '[git-multi-config] Refusing to commit with %s\n' "$email" >&2
 printf '[git-multi-config] 拒绝提交：当前身份邮箱 %s 不在登记列表中\n' "$email" >&2
-printf '[git-multi-config] Registered / 已登记: %s %s\n' "$company" "$personal" >&2
+printf '[git-multi-config] Registered / 已登记:%s\n' "$registered" >&2
 printf '[git-multi-config] Fix: git config --local --unset user.email\n' >&2
 printf '[git-multi-config] Bypass: GMC_ALLOW_ANY=1 git commit ...\n' >&2
 exit 1
@@ -629,7 +745,7 @@ cmd_init() {
   require_email "$COMPANY_EMAIL" "$(t p_company_email)" || exit 1
   COMPANY_GPG="$(ask COMPANY_GPG p_company_gpg "${COMPANY_GPG:-}")"
   COMPANY_DIRS="$(norm_dirs "$(ask COMPANY_DIRS p_company_dirs "${COMPANY_DIRS:-$HOME/work}")")"
-  [ -n "$COMPANY_DIRS" ] || die "$(t p_company_dirs): $(t err_required)"
+  [ -n "$COMPANY_DIRS" ] || die "$(t p_company_dirs): $(t err_dirs_empty)"
 
   echo
   info "$(t step2)"
@@ -641,6 +757,9 @@ cmd_init() {
   require_email "$PERSONAL_EMAIL" "$(t p_personal_email)" || exit 1
   PERSONAL_GPG="$(ask PERSONAL_GPG p_personal_gpg "${PERSONAL_GPG:-}")"
   PERSONAL_DIRS="$(norm_dirs "$(ask PERSONAL_DIRS p_personal_dirs "${PERSONAL_DIRS:-$HOME/personal}")")"
+  # 仅含分隔符（: :: ,, ;）的取值会被 norm_dirs 归一成空串，此时默认值兜底已经
+  # 走过去了步骤，若不拦住就会写出 0 条 personal 规则却仍报「已生效」（见 BUG-3）
+  [ -n "$PERSONAL_DIRS" ] || die "$(t p_personal_dirs): $(t err_dirs_empty)"
 
   echo
   info "$(t step3)"
@@ -723,6 +842,13 @@ cmd_init() {
   write_includeif
   ok "$(t ok_inc)"
 
+  # git < 2.36 时 hasconfig 规则被静默跳过，仅在 doctor 里才看得到；init 结束是
+  # 用户最可能读到输出的时刻，就在这里提示（见 UX-2）
+  if ! supports_hasconfig; then
+    warn "$(t warn_no_hasconfig): $(git --version 2>/dev/null | sed 's/git version //')"
+    dim "      $(t warn_no_hasconfig_hint)"
+  fi
+
   if [ "$hooks_ans" = "y" ]; then
     info "$(t info_write_hooks)"
     install_hooks
@@ -749,16 +875,30 @@ cmd_init() {
 # ---------------------------------------------------------------------------
 # audit
 # ---------------------------------------------------------------------------
+# 扫出受管目录下的仓库路径。
+# find 的 stderr 不再丢弃：遇到不可读路径时 find 会非零退出，叠加 pipefail 会让
+# 整个 audit 在打印任何一行之前就中止，表现为「0 字节输出 + 退出码 1」，用户无从
+# 得知发生了什么（见 BUG-5）。现在改为逐条 warn 出来，并保证扫描本身不中断。
 scan_repos() {
-  local d
+  local d errf="$CONFIG_DIR/.audit.scanerr" line
+  mkdir -p "$CONFIG_DIR"
   {
     each_company_dir
     each_personal_dir
   } | while IFS= read -r d; do
     if [ -d "$d" ]; then
-      find "$d" -maxdepth "$SCAN_DEPTH" -name .git -prune 2>/dev/null | sed 's#/\.git$##'
+      : > "$errf"
+      find "$d" -maxdepth "$SCAN_DEPTH" -name .git -prune 2>"$errf" | sed 's#/\.git$##' || true
+      if [ -s "$errf" ]; then
+        # find 的报错可能没有结尾换行，read 此时返回非零但已赋值，
+        # 故必须带 || [ -n "$line" ]，否则循环体一次都不会执行
+        while IFS= read -r line || [ -n "$line" ]; do
+          warn "$(t warn_scan): $line"
+        done < "$errf"
+      fi
     fi
-  done
+  done || true
+  rm -f "$errf" 2>/dev/null || true
 }
 
 cmd_audit() {
@@ -1024,6 +1164,25 @@ main() {
   local cmd="" AUDIT_FIX=0 INSTALL_HOOKS_DEFAULT="n"
   RESTORE_BACKUP=0
 
+  # 预扫 --lang：用户习惯把 --lang 写在后面（如 `audit --depth abc --lang en`），
+  # 但参数解析阶段的报错可能在它之前就产生，先扫一遍才能保证提示语是用户要的语言
+  local pi=1 pv
+  while [ "$pi" -le "$#" ]; do
+    pv="${!pi}"
+    case "$pv" in
+      --lang=*) LANG_CODE="${pv#*=}" ;;
+      --lang)
+        pi=$((pi + 1))
+        if [ "$pi" -le "$#" ]; then LANG_CODE="${!pi}"; fi
+        ;;
+    esac
+    pi=$((pi + 1))
+  done
+  case "$LANG_CODE" in
+    en|zh) ;;
+    *) LANG_CODE="zh" ;;
+  esac
+
   while [ $# -gt 0 ]; do
     case "$1" in
       init|setup)      cmd="init" ;;
@@ -1040,8 +1199,15 @@ main() {
       --lang)          shift; LANG_CODE="${1:-zh}" ;;
       --lang=*)        LANG_CODE="${1#*=}" ;;
       --fix)           AUDIT_FIX=1 ;;
-      --depth)         shift; SCAN_DEPTH="${1:-4}" ;;
-      --depth=*)       SCAN_DEPTH="${1#*=}" ;;
+      --depth)
+        shift
+        require_positive_int "${1:-}" "$(t opt_depth)" || exit 1
+        SCAN_DEPTH="$1"
+        ;;
+      --depth=*)
+        require_positive_int "${1#*=}" "$(t opt_depth)" || exit 1
+        SCAN_DEPTH="${1#*=}"
+        ;;
       --ssh)           TEST_SSH=1 ;;
       --with-hooks)    INSTALL_HOOKS_DEFAULT="y" ;;
       --restore)       RESTORE_BACKUP=1 ;;

@@ -410,7 +410,10 @@ COMPANY_DIRS='~/work:~/clients'
 
 Enabled with `--with-hooks` or by answering *yes* in the wizard. It writes a `pre-commit` hook into
 the tool's own directory and points the global `core.hooksPath` at it. The hook compares
-`git config user.email` with the two registered addresses:
+`git config user.email` with the two registered addresses. It reads those addresses with
+`git config --file` from `~/.gitconfig-company` and `~/.gitconfig-personal` — `state.conf` is
+not involved, and the comparison is exact, so an address containing `'`, `!`, `$` or a space is
+handled correctly.
 
 ```
 [git-multi-config] Refusing to commit with wrong@example.com

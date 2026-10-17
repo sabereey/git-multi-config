@@ -241,6 +241,7 @@ EOF
   && pass "init exits 0" || { fail "init exits 0"; show_log "scenario B init failed" "$WORK/init.log"; }
 assert_contains "$HOME/.ssh/config" "Host github.com-work" "company alias created"
 assert_contains "$HOME/.ssh/config" "Host github.com-personal" "personal alias created"
+assert_contains "$HOME/.ssh/config" "IdentityFile \"$HOME/.ssh/id_ed25519\"" "same-host alias IdentityFile quoted (BUG-1)"
 assert_eq "$(git config --global core.hooksPath 2>/dev/null || echo none)" "none" "no hook installed when not requested"
 
 # 身份仍然按目录切换（同域名场景由 core.sshCommand 保证密钥正确）
@@ -300,6 +301,104 @@ else
   fail "audit clean with multiple dirs"; show_log "scenario C audit failed" "$WORK/audit.log"
 fi
 assert_contains "$WORK/audit.log" "Repositories scanned: 2" "both dirs scanned"
+rm -rf "$WORK"
+
+# ---------------------------------------------------------------------------
+# scenario D — 已修复问题的回归护栏（BUG-1/2/3/4/5、SEC-1、UX-2）
+# 每条都对应一个真实复现过的故障，别删。
+# ---------------------------------------------------------------------------
+section "scenario D — regressions for fixed issues"
+
+setup_isolation
+mkdir -p "$HOME/work" "$HOME/My Keys"
+touch "$HOME/My Keys/id_ed25519_company" "$HOME/My Keys/id_ed25519"
+chmod 600 "$HOME/My Keys/id_ed25519_company" "$HOME/My Keys/id_ed25519"
+
+cat > "$WORK/answers.conf" <<'EOF'
+COMPANY_HOST=git.corp.example.com
+COMPANY_KEY=~/My Keys/id_ed25519_company
+COMPANY_NAME=Corp User
+COMPANY_EMAIL=o'brien+tag@corp.example.com
+COMPANY_DIRS=~/work
+PERSONAL_KEY=~/My Keys/id_ed25519
+PERSONAL_NAME=Personal User
+PERSONAL_EMAIL=you@example.com
+PERSONAL_DIRS=~/personal
+DEFAULT_ID=personal
+INSTALL_HOOKS=1
+EOF
+
+"$TOOL_BASH" "$SCRIPT" init --from-file "$WORK/answers.conf" --yes --lang en > "$WORK/init.log" 2>&1 \
+  && pass "init exits 0" || { fail "init exits 0"; show_log "scenario D init failed" "$WORK/init.log"; }
+
+# BUG-1：密钥路径含空格时必须加引号，否则 ssh 放弃整份 config
+assert_contains "$HOME/.ssh/config" "IdentityFile \"$HOME/My Keys/id_ed25519_company\"" "company IdentityFile quoted (BUG-1)"
+assert_contains "$HOME/.ssh/config" "IdentityFile \"$HOME/My Keys/id_ed25519\"" "personal IdentityFile quoted (BUG-1)"
+
+# UX-2：git < 2.36（doctor 是权威判据）时 init 必须提示，而不是静默跳过 hasconfig
+if "$TOOL_BASH" "$SCRIPT" doctor --lang en 2>&1 | grep -q "no hasconfig support"; then
+  assert_contains "$WORK/init.log" "2.36" "init warns when git lacks hasconfig (UX-2)"
+else
+  pass "git supports hasconfig, no init warning needed (UX-2)"
+fi
+
+# BUG-2：钩子不能误拦含特殊字符的登记邮箱
+HOOK="$CFG/hooks/pre-commit"
+mkdir -p "$HOME/work/repo-d1"
+git -C "$HOME/work/repo-d1" init -q
+git -C "$HOME/work/repo-d1" config user.name t
+git -C "$HOME/work/repo-d1" config user.email "o'brien+tag@corp.example.com"
+if ( cd "$HOME/work/repo-d1" && sh "$HOOK" >/dev/null 2>&1 ); then
+  pass "guard allows registered email with apostrophe (BUG-2)"
+else
+  fail "guard allows registered email with apostrophe (BUG-2)"
+fi
+git -C "$HOME/work/repo-d1" config user.email "stranger@evil.example.com"
+if ( cd "$HOME/work/repo-d1" && sh "$HOOK" >/dev/null 2>&1 ); then
+  fail "guard still blocks unregistered email (BUG-2)"
+else
+  pass "guard still blocks unregistered email (BUG-2)"
+fi
+
+# BUG-3：仅含分隔符的 PERSONAL_DIRS 必须报错，不能写出 0 条规则还报成功
+sed 's|^PERSONAL_DIRS=.*|PERSONAL_DIRS=:|' "$WORK/answers.conf" > "$WORK/baddirs.conf"
+if "$TOOL_BASH" "$SCRIPT" init --from-file "$WORK/baddirs.conf" --yes --lang en > "$WORK/baddirs.log" 2>&1; then
+  fail "separator-only PERSONAL_DIRS rejected (BUG-3)"
+else
+  pass "separator-only PERSONAL_DIRS rejected (BUG-3)"
+fi
+
+# BUG-4：--depth 非法值必须有可读报错，而不是 0 字节输出 + 退出码 1
+if "$TOOL_BASH" "$SCRIPT" audit --depth abc --lang en > "$WORK/depth.log" 2>&1; then
+  fail "--depth abc rejected (BUG-4)"
+else
+  pass "--depth abc rejected (BUG-4)"
+fi
+assert_contains "$WORK/depth.log" "positive integer" "--depth abc gives a readable message (BUG-4)"
+
+# BUG-5：受管目录里有不可读子目录时，audit 仍要出结果并提示，不能静默报废
+mkdir -p "$HOME/work/locked"
+git -C "$HOME/work/locked" init -q
+chmod 000 "$HOME/work/locked"
+"$TOOL_BASH" "$SCRIPT" audit --lang en > "$WORK/scan.log" 2>&1 || true
+chmod 755 "$HOME/work/locked"
+if [ -s "$WORK/scan.log" ]; then
+  pass "audit still reports with an unreadable dir (BUG-5)"
+else
+  fail "audit still reports with an unreadable dir (BUG-5)"
+fi
+assert_contains "$WORK/scan.log" "cannot read, skipped" "unreadable dir is surfaced (BUG-5)"
+
+# SEC-1：state.conf 只能被解析，不能被当作代码执行
+printf 'touch %s/PWNED_LINE\n' "$WORK" >> "$CFG/state.conf"
+printf 'COMPANY_EMAIL=$(touch %s/PWNED_VALUE)\n' "$WORK" >> "$CFG/state.conf"
+"$TOOL_BASH" "$SCRIPT" list --lang en > /dev/null 2>&1 || true
+assert_not_exists "$WORK/PWNED_LINE" "state.conf line not executed (SEC-1)"
+assert_not_exists "$WORK/PWNED_VALUE" "state.conf value not executed (SEC-1)"
+# 值应被当作普通字符串读回，而不是展开
+"$TOOL_BASH" "$SCRIPT" list --lang en > "$WORK/list-sec.log" 2>&1 || true
+assert_contains "$WORK/list-sec.log" '$(touch' "state.conf value kept literal (SEC-1)"
+
 rm -rf "$WORK"
 
 # ---------------------------------------------------------------------------

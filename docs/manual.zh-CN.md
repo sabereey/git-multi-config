@@ -383,7 +383,7 @@ COMPANY_DIRS='~/work:~/clients'
 
 ## 9. 提交拦截钩子
 
-用 `--with-hooks` 或在向导里选"是"即可启用。它会把 `pre-commit` 写进工具自己的目录，并把全局 `core.hooksPath` 指过去。钩子把当前 `git config user.email` 与登记的两个邮箱比对：
+用 `--with-hooks` 或在向导里选"是"即可启用。它会把 `pre-commit` 写进工具自己的目录，并把全局 `core.hooksPath` 指过去。钩子把当前 `git config user.email` 与登记的两个邮箱比对。这两个邮箱是用 `git config --file` 从 `~/.gitconfig-company` 和 `~/.gitconfig-personal` 读的 —— 不经过 `state.conf`，且是精确比较，所以邮箱里含 `'`、`!`、`$` 或空格都不会出问题。
 
 ```
 [git-multi-config] Refusing to commit with wrong@example.com
